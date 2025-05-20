@@ -6,6 +6,9 @@ import Frame.ChatWindow;
 import Frame.LoginWindow;
 import javax.swing.JOptionPane;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
 import info.Login_info;
 import io.IOStream;
 
@@ -28,8 +31,10 @@ public class ClientHandler extends Thread{
                 Object obj = IOStream.readMessage(socket);
                 encap_info INFO = (encap_info)obj;
                 if(INFO.get_type()==3) {//判断类型为登录消息
-                    Login_info lg = INFO.get_login_info();
+                    Login_info lg = INFO.get_login_info();//解析包
+                    online_users = lg.getOnlineUsers();
                     loginResult(lg);
+                    chatFrame.updateOnlineUsers(online_users);
                 }
                 System.out.println("客户端" +obj);
                 Thread.sleep(1000);
@@ -51,4 +56,5 @@ public class ClientHandler extends Thread{
             System.out.println("客户端接收到登录失败");//干点啥事，不着急，后续再写
         }
     }
+
 }

@@ -5,6 +5,8 @@ import java.awt.*;
 import java.io.IOException;
 import java.io.Serial;
 import java.net.Socket;
+import java.util.ArrayList;
+
 import info.*;
 import io.IOStream;
 import telecommunicate.ClientHandler;
@@ -14,7 +16,8 @@ import javax.swing.text.BadLocationException;
 public class ChatWindow extends JFrame {
     public static final int WIDTH = 750;
     public static final int HEIGHT = 600;
-
+    private DefaultListModel<String> usersModel = new DefaultListModel<>();
+    JList<String> Users = new JList<>(usersModel);
     @Serial
     private static final long serialVersionUID = 2612988528480049031L;
     public ChatWindow() {
@@ -62,7 +65,7 @@ public class ChatWindow extends JFrame {
         bg.add(Sendscroll);
 
         //在线用户列表
-        JList Users = new JList();
+
         Users.setFont(new Font("宋体",Font.PLAIN,16));
         Users.setVisibleRowCount(17);//可以显示多少行
         Users.setFixedCellWidth(180);//每个单元格宽高
@@ -82,7 +85,14 @@ public class ChatWindow extends JFrame {
 
         this.add(bg);
     }
-
+    public void updateOnlineUsers(ArrayList<String> onlineUsers) {
+        SwingUtilities.invokeLater(() -> {
+            usersModel.clear();
+            onlineUsers.forEach(usersModel::addElement);
+            // 如果需要保持滚动位置可以添加：
+            Users.ensureIndexIsVisible(usersModel.getSize() - 1);
+        });
+    }
     private void handleSendMessage(JTextPane sendPane,JTextPane messagePane) {
         String message = sendPane.getText().trim();
         if (!message.isEmpty()) {
