@@ -5,20 +5,26 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
+
+import Frame.ServerWindow;
 import info.Chat_info;
 import java.util.*;
 import info.Login_info;
 import io.IOStream;
 import info.encap_info;
 
+import javax.swing.*;
+
 public class ServerHandler extends Thread {
 
     Socket socket;
     ChatServer server;
     String current_user;//标记当前线程服务的用户
-    public ServerHandler(Socket socket,ChatServer server) {
+    ServerWindow ServerFrame;
+    public ServerHandler(Socket socket, ChatServer server, ServerWindow serverframe) {
         this.socket = socket;
         this.server = server;
+        this.ServerFrame = serverframe;
     }
 
     @Override
@@ -29,7 +35,7 @@ public class ServerHandler extends Thread {
                 Object obj = IOStream.readMessage(socket);
                 encap_info INFO = (encap_info)obj;
                 encap_info RETURN = new encap_info();
-                if(INFO.get_type()==3) {
+                if(INFO.get_type()==3) {//处理login消息
                     Login_info tfi = INFO.get_login_info();
                     this.current_user = tfi.getUserName();
                     boolean flag = checkUserLogin(tfi);
@@ -37,10 +43,13 @@ public class ServerHandler extends Thread {
                     if(flag) {
                         //返回登录成功给客户端
                         this.server.add_online_user(tfi.getUserName());
+                        this.server.add_online_socket(socket);
+                        server.userSocketMap.put(tfi.getUserName(), socket);
+                        tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
                         tfi.setLoginSucceessFlag(true);
                         RETURN.set_login_info(tfi);
                         RETURN.set_type(3);
-                        IOStream.writeMessage(socket , RETURN);
+                        sendALL(INFO);//通知所有人，该用户已上线
 
                     }else {
                         System.out.println("登录失败");//暂时先这么写，后续封装消息
@@ -108,6 +117,7 @@ public class ServerHandler extends Thread {
         }
         return false;
     }
+
     public boolean checkUserLogin(Login_info tfi) {
         try {
             String userName = tfi.getUserName();
@@ -127,4 +137,12 @@ public class ServerHandler extends Thread {
         }
         return false;
     }
+
+    public void sendALL(encap_info INFO){
+        for (int i = 0; i < server.online_sockets.size(); i++) {
+            Socket tempSocket = server.online_sockets.get(i);
+            IOStream.writeMessage(tempSocket , INFO);
+        }
+    }
 }
+

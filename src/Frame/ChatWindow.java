@@ -1,12 +1,20 @@
 package Frame;
-
+import javax.swing.text.Document;
 import javax.swing.*;
 import java.awt.*;
+import java.io.IOException;
 import java.io.Serial;
+import java.net.Socket;
+import info.*;
+import io.IOStream;
+import telecommunicate.ClientHandler;
+
+import javax.swing.text.BadLocationException;
 //聊天主界面
 public class ChatWindow extends JFrame {
     public static final int WIDTH = 750;
     public static final int HEIGHT = 600;
+
     @Serial
     private static final long serialVersionUID = 2612988528480049031L;
     public ChatWindow() {
@@ -68,8 +76,42 @@ public class ChatWindow extends JFrame {
         //发送按钮
         JButton send = new JButton("发送信息");
         send.setBounds(15,533,125,25);
+        getRootPane().setDefaultButton(send);
+        send.addActionListener(e -> handleSendMessage(sendPane,messagePane)); // 绑定点击事件
         bg.add(send);
+
         this.add(bg);
+    }
+
+    private void handleSendMessage(JTextPane sendPane,JTextPane messagePane) {
+        String message = sendPane.getText().trim();
+        if (!message.isEmpty()) {
+            //创建一个聊天的消息
+            encap_info INFO = new encap_info();
+            Chat_info chat = new Chat_info();
+            chat.setMessage(message);
+            //下面要获取当前群聊的一些信息，这里还未实现，先空着
+
+
+
+            INFO.set_chat_info(chat);
+            INFO.set_type(4);
+            connectionServer(INFO);
+            Document doc = messagePane.getDocument();
+            // 自动滚动到底部
+            messagePane.setCaretPosition(doc.getLength());
+            // 清空发送框
+            sendPane.setText("");
+        }
+    }
+
+    public void connectionServer(encap_info INFO) {
+        try {
+            Socket socket = new Socket("127.0.0.1", 6688);//和6688端口建立连接
+            IOStream.writeMessage(socket , INFO);//发送消息
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
     }
     public static void main(String[] args) {
         SwingUtilities.invokeLater(()->{

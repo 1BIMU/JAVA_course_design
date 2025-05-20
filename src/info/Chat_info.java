@@ -5,9 +5,9 @@ import java.io.Serializable;
 public class Chat_info implements Serializable {
     @Serial
             private static final long serialVersionUID = -5761256693412260126L;
-    String message;
-    String from_username;
-    String[] to_username;
+    String message;//消息主体
+    String from_username;//当前用户
+    String[] to_username;//给到那些用户，需要包含from_username
     int chat_id;//当前群聊的ID
     boolean transfer_status;
     public Chat_info() {

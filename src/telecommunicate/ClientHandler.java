@@ -5,15 +5,15 @@ import info.*;
 import Frame.ChatWindow;
 import Frame.LoginWindow;
 import javax.swing.JOptionPane;
-
+import java.util.ArrayList;
 import info.Login_info;
 import io.IOStream;
 
 public class ClientHandler extends Thread{
-
+    ChatWindow chatFrame;
     Socket socket;
     LoginWindow loginFrame;
-
+    ArrayList<String> online_users = new ArrayList<String>();//在客户端也需要同步当前在线的用户数
     public ClientHandler(Socket socket , LoginWindow loginFrame) {
         this.socket = socket;
         this.loginFrame = loginFrame;
@@ -43,7 +43,7 @@ public class ClientHandler extends Thread{
     public void loginResult(Login_info tfi) {
         if(tfi.getLoginSucceessFlag()) {
             //登录成功，打开主界面
-            ChatWindow chatFrame = new ChatWindow();
+            chatFrame = new ChatWindow();
             chatFrame.setVisible(true);
             loginFrame.dispose();//关闭窗体
         }else {

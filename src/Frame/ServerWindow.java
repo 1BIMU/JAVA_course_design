@@ -9,7 +9,8 @@ public class ServerWindow extends JFrame {
     public static final int HEIGHT = 500;
     @Serial
     private static final long serialVersionUID = 8659545959675588211L;
-
+    public JLabel UserPanel;
+    public JPanel ServerInfo;
     public ServerWindow() {
         initializeUI();
         setupComponents();
@@ -149,8 +150,8 @@ public class ServerWindow extends JFrame {
         Server.setBackground(Color.WHITE);
         Server.setFont(new Font("宋体", Font.PLAIN, 16));
 
-        JLabel UserPanel = getUserPanel();
-        JPanel ServerInfo = getServerInfoPanel();
+        UserPanel = getUserPanel();
+        ServerInfo = getServerInfoPanel();
         Server.add("服务器信息",ServerInfo);
         Server.add("在线用户",UserPanel);
 

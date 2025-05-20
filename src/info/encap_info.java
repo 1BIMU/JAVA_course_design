@@ -8,7 +8,7 @@ import info.Login_info;
 public class encap_info implements Serializable {//对各种消息进行封装
     @Serial
     private static final long serialVersionUID = -2664356335109440843L;
-    int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，如果要添加消息，直接在后面改就行
+    int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，5代表定时同步的信息，如果要添加消息，直接在后面改就行
     Chat_info chat_info;
     Group_info group_info;
     Login_info login_info;
@@ -36,4 +36,5 @@ public class encap_info implements Serializable {//对各种消息进行封装
     public void set_type(int type) {
         this.type = type;
     }
+
 }
