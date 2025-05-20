@@ -3,7 +3,11 @@ package Frame;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-
+import java.net.Socket;
+import io.IOStream;
+import info.Login_info;
+import telecommunicate.ClientHandler;
+import java.io.IOException;
 public class LoginWindow extends JFrame {
 
     private final JTextField usernameField = new JTextField(15);
@@ -65,27 +69,26 @@ public class LoginWindow extends JFrame {
 
     private void performLogin(ActionEvent e) {
         String username = usernameField.getText().trim();
-        char[] password = passwordField.getPassword();
-
-        // 这里应该验证用户名和密码
-        if (username.isEmpty() || password.length == 0) {
-            JOptionPane.showMessageDialog(this,
-                    "用户名和密码不能为空",
-                    "登录失败",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        // 模拟登录成功
-        JOptionPane.showMessageDialog(this,
-                "登录成功！\n用户名: " + username,
-                "登录成功",
-                JOptionPane.INFORMATION_MESSAGE);
-
-        // 清除密码字段
-        passwordField.setText("");
+        String password = passwordField.getText().trim();
+        //进行消息封装
+        Login_info login = new Login_info();
+        login.setPassword(password);
+        login.setUserName(username);
+        connectionServer(login);//发送沟通消息，尝试连接
     }
+    public void connectionServer(Login_info tif) {
+        try {
+            Socket socket = new Socket("127.0.0.1", 6688);//和6688端口建立连接
 
+            IOStream.writeMessage(socket , tif);//写入流
+
+            ClientHandler clientHandler = new ClientHandler(socket , this);
+            clientHandler.start();
+
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
+    }
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             LoginWindow window = new LoginWindow();
