@@ -1,10 +1,14 @@
 package info;
+import java.io.Serial;
+import java.io.Serializable;
 //聊天消息封装
-public class Chat_info {
+public class Chat_info implements Serializable {
+    @Serial
+            private static final long serialVersionUID = -5761256693412260126L;
     String message;
     String from_username;
     String[] to_username;
-    String chat_name;//当前聊天室的名字，用于同步聊天室的ID
+    int chat_id;//当前群聊的ID
     boolean transfer_status;
     public Chat_info() {
     }
@@ -32,11 +36,11 @@ public class Chat_info {
     public void setTransfer_status(boolean transfer_status) {
         this.transfer_status = transfer_status;
     }
-    public String getChat_name() {
-        return chat_name;
+    public int getChat_id() {
+        return chat_id;
     }
-    public void setChat_name(String chat_name) {
-        this.chat_name = chat_name;
+    public void setChat_id(int chat_id) {
+        this.chat_id = chat_id;
     }
 }
 

@@ -5,8 +5,9 @@ import java.net.Socket;
 import Frame.ServerWindow;
 import java.util.ArrayList;
 public class ChatServer {// 服务器启动入口
-    ArrayList<String> online_users;//维护在线用户列表
+    ArrayList<String> online_users = new ArrayList<>();//维护在线用户列表
     public ChatServer() {
+
         try {
             //建立服务器的Socket监听
             ServerSocket sso = new ServerSocket(6688);

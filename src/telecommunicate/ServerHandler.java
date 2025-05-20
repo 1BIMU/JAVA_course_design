@@ -9,7 +9,7 @@ import info.Chat_info;
 import java.util.*;
 import info.Login_info;
 import io.IOStream;
-
+import info.encap_info;
 
 public class ServerHandler extends Thread {
 
@@ -27,8 +27,10 @@ public class ServerHandler extends Thread {
         while(true) {
             try {
                 Object obj = IOStream.readMessage(socket);
-                if(obj instanceof Login_info) {
-                    Login_info tfi = (Login_info)obj;
+                encap_info INFO = (encap_info)obj;
+                encap_info RETURN = new encap_info();
+                if(INFO.get_type()==3) {
+                    Login_info tfi = INFO.get_login_info();
                     this.current_user = tfi.getUserName();
                     boolean flag = checkUserLogin(tfi);
                     tfi.setLoginSucceessFlag(false);
@@ -36,16 +38,20 @@ public class ServerHandler extends Thread {
                         //返回登录成功给客户端
                         this.server.add_online_user(tfi.getUserName());
                         tfi.setLoginSucceessFlag(true);
-                        IOStream.writeMessage(socket , tfi);
+                        RETURN.set_login_info(tfi);
+                        RETURN.set_type(3);
+                        IOStream.writeMessage(socket , RETURN);
 
                     }else {
                         System.out.println("登录失败");//暂时先这么写，后续封装消息
                         //返回登录失败给客户端
-                        IOStream.writeMessage(socket , tfi);
+                        RETURN.set_login_info(tfi);
+                        RETURN.set_type(3);
+                        IOStream.writeMessage(socket , RETURN);
                         break;//登录失败了就关闭这个线程，节省资源
                     }
-                }else if(obj instanceof Chat_info) {//收到一条消息
-                    Chat_info ci = (Chat_info)obj;
+                }else if(INFO.get_type()==4) {//收到一条消息
+                    Chat_info ci = INFO.get_chat_info();
                     boolean flag = false;
                     for(int i = 0;i<ci.getTo_username().length;i++) {//先检查，自己是不是别人发的对象
                         if(current_user.equals(ci.getTo_username()[i])) {
@@ -60,7 +66,9 @@ public class ServerHandler extends Thread {
                         ci.setTransfer_status(true);
                     }
                     ci.setTo_username(valid_user);
-                    IOStream.writeMessage(socket , ci);//发送相关信息给对应的客户端
+                    RETURN.set_chat_info(ci);
+                    RETURN.set_type(4);
+                    IOStream.writeMessage(socket , RETURN);//发送相关信息给对应的客户端
                 }
                 Thread.sleep(1000);
             } catch (InterruptedException e) {

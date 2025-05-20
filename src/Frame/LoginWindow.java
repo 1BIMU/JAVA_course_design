@@ -5,7 +5,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.net.Socket;
 import io.IOStream;
-import info.Login_info;
+import info.*;
 import telecommunicate.ClientHandler;
 import java.io.IOException;
 public class LoginWindow extends JFrame {
@@ -76,11 +76,14 @@ public class LoginWindow extends JFrame {
         login.setUserName(username);
         connectionServer(login);//发送沟通消息，尝试连接
     }
-    public void connectionServer(Login_info tif) {
+    public void connectionServer(Login_info lg) {
         try {
+            encap_info INFO = new encap_info();
+            INFO.set_login_info(lg);
+            INFO.set_type(3);
             Socket socket = new Socket("127.0.0.1", 6688);//和6688端口建立连接
 
-            IOStream.writeMessage(socket , tif);//写入流
+            IOStream.writeMessage(socket , INFO);//写入流
 
             ClientHandler clientHandler = new ClientHandler(socket , this);
             clientHandler.start();
