@@ -98,9 +98,21 @@ public class ServerHandler extends Thread {
                         //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
                         gi.set_Group_id(ID);
                         Send2Users(INFO,to_user);
-
                     }else{//如果不是建立群聊，那么是对文件中进行修改
-
+                        FileIO fileio = new FileIO();
+                        ArrayList<String> added_people = gi.get_added_people();
+                        ArrayList<String> removed_people = gi.get_removed_people();
+                        fileio.manageGroupMembers(gi.get_Group_id(),added_people,removed_people);
+                        //然后发消息，通知added_people被添加
+                        Group_info added = gi;
+                        added.setExist(true);
+                        RETURN.set_group_info(added);
+                        Send2Users(INFO,added_people);
+                        //发消息，告诉removed_people被删除
+                        Group_info removed = gi;
+                        removed.setExist(false);
+                        RETURN.set_group_info(removed);
+                        Send2Users(INFO,removed_people);
                     }
                 }else if(INFO.get_type()==5) {//收到了注册消息
                     Reg_info reg = INFO.get_reg_info();

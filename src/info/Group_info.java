@@ -10,6 +10,7 @@ public class Group_info implements Serializable {//该info用于封装群聊类�
     ArrayList<String> added_people;
     ArrayList<String> removed_people;
     boolean establish;//是否为新建立的群聊
+    boolean exist;//用于告知用户，你是否还存在于这个群聊中
     public String get_Name(){
         return name;
     }
@@ -33,5 +34,17 @@ public class Group_info implements Serializable {//该info用于封装群聊类�
     }
     public void setEstablish(boolean establish) {
         this.establish = establish;
+    }
+    public ArrayList<String> get_removed_people(){
+        return removed_people;
+    }
+    public void set_removed_people(ArrayList<String> removed_people){
+        this.removed_people = removed_people;
+    }
+    public boolean isExist(){
+        return exist;
+    }
+    public void setExist(boolean exist){
+        this.exist = exist;
     }
 }
