@@ -1,5 +1,5 @@
 package telecommunicate;
-
+import io.FileIO;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -9,6 +9,8 @@ import java.net.Socket;
 import Frame.ServerWindow;
 import info.Chat_info;
 import java.util.*;
+
+import info.Group_info;
 import info.Login_info;
 import io.IOStream;
 import info.encap_info;
@@ -78,10 +80,36 @@ public class ServerHandler extends Thread {
                     RETURN.set_chat_info(ci);
                     RETURN.set_type(4);
                     IOStream.writeMessage(socket , RETURN);//发送相关信息给对应的客户端
+                }else if(INFO.get_type()==1) {//如果收到的消息为群聊控制消息
+                    Group_info gi = INFO.get_group_info();
+                    if(gi.isEstablish()==true){//如果是建立群聊的消息
+                        FileIO fileio = new FileIO();
+                        ArrayList<String> to_user = gi.get_added_people();
+                        //为这个群聊分配一个随机ID
+                        int ID;
+                        while(true){
+                            Random rand = new Random();
+                            int randomInt = rand.nextInt();
+                            if (!fileio.groupExists(randomInt)){//如果生成的ID并非已存在，那么跳出循环
+                                ID = randomInt;
+                                break;
+                            }
+                        }
+                        //写入服务端的数据文件中
+                        fileio.writeGroup(ID,to_user);
+                        //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
+                        gi.set_Group_id(ID);
+                        Send2Users(INFO,to_user);
+
+                    }else{//如果不是建立群聊，那么是对文件中进行修改
+
+                    }
                 }
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
 
@@ -141,6 +169,14 @@ public class ServerHandler extends Thread {
     public void sendALL(encap_info INFO){
         for (int i = 0; i < server.online_sockets.size(); i++) {
             Socket tempSocket = server.online_sockets.get(i);
+            IOStream.writeMessage(tempSocket , INFO);
+        }
+    }
+
+    public void Send2Users(encap_info INFO,ArrayList<String> to_user){
+        for(int i = 0;i<to_user.size();i++) {
+            //先从hashmap中拿到对应用户的socket
+            Socket tempSocket = server.userSocketMap.get(to_user.get(i));
             IOStream.writeMessage(tempSocket , INFO);
         }
     }

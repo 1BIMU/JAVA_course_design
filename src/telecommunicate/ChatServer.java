@@ -10,7 +10,7 @@ import java.util.Map;
 public class ChatServer {// 服务器启动入口
     public ArrayList<String> online_users = new ArrayList<String>();//维护在线用户列表
     public ArrayList<Socket> online_sockets = new ArrayList<Socket>();
-    static Map<String,Socket> userSocketMap = new HashMap<>();
+    public Map<String,Socket> userSocketMap = new HashMap<>();
     public ChatServer() {
         try {
             //建立服务器的Socket监听
