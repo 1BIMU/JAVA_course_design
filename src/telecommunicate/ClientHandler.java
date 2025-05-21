@@ -36,7 +36,10 @@ public class ClientHandler extends Thread{
                     online_users = lg.getOnlineUsers();
                     current_user = lg.getUserName();
                     loginResult(lg);
-                    chatFrame.updateOnlineUsers(online_users);
+                    // 只有在登录成功且chatFrame不为null时才更新用户列表
+                    if (lg.getLoginSucceessFlag() && chatFrame != null) {
+                        chatFrame.updateOnlineUsers(online_users);
+                    }
                 }
                 System.out.println("客户端" +obj);
                 Thread.sleep(1000);
@@ -47,17 +50,16 @@ public class ClientHandler extends Thread{
     }
 
 
-    public void loginResult(Login_info tfi) {
-        if(tfi.getLoginSucceessFlag()) {
-            //登录成功，打开主界面
+    private void loginResult(Login_info lg) {
+        if (lg.getLoginSucceessFlag()) {
+            // 登录成功
+            loginFrame.setVisible(false);
             chatFrame = new ChatWindow();
             chatFrame.setVisible(true);
-            loginFrame.dispose();//关闭窗体
             chatFrame.set_current_user(current_user);//当前用户
-        }else {
-            //登录失败
-            System.out.println("客户端接收到登录失败");//干点啥事，不着急，后续再写
-            //用loginFrame弹出登录失败的消息
+        } else {
+            // 登录失败
+            JOptionPane.showMessageDialog(loginFrame, "登录失败，用户名或密码错误", "登录失败", JOptionPane.ERROR_MESSAGE);
         }
     }
 
