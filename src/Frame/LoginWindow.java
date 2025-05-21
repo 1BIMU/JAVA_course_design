@@ -55,14 +55,19 @@ public class LoginWindow extends JFrame {
         gbc.gridx = 1;
         mainPanel.add(passwordField, gbc);
 
-        // 登录按钮
         gbc.gridx = 0;
         gbc.gridy = 2;
-        gbc.gridwidth = 2;
-        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.gridwidth = 1;  // 修改为1列宽度
         JButton loginButton = new JButton("登录");
         loginButton.addActionListener(this::performLogin);
         mainPanel.add(loginButton, gbc);
+
+        // 新增注册按钮
+        gbc.gridx = 1;
+        gbc.gridy = 2;
+        JButton registerButton = new JButton("注册");
+        registerButton.addActionListener(this::performRegistration); // 绑定注册方法
+        mainPanel.add(registerButton, gbc);
 
         add(mainPanel);
     }
@@ -90,6 +95,42 @@ public class LoginWindow extends JFrame {
 
         } catch (IOException e1) {
             e1.printStackTrace();
+        }
+    }
+    private void performRegistration(ActionEvent e) {
+        String username = usernameField.getText().trim();
+        String password = new String(passwordField.getPassword()).trim();
+
+        // 输入验证
+        if (username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "用户名和密码不能为空", "错误", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // 封装注册信息
+        Reg_info REG = new Reg_info();
+        REG.set_info(username,password,0);
+        // 连接服务器
+        connectionRegistrationServer(REG);
+    }
+
+    // 新增的注册连接方法
+    private void connectionRegistrationServer(Reg_info reg) {
+        try {
+            encap_info INFO = new encap_info();
+            INFO.set_reg_info(reg);  // 假设有设置注册信息的方法
+            INFO.set_type(4);                 // 假设4表示注册类型
+
+            Socket socket = new Socket("127.0.0.1", 6688);
+            IOStream.writeMessage(socket, INFO);
+
+            // 启动客户端处理器
+            ClientHandler clientHandler = new ClientHandler(socket, this);
+            clientHandler.start();
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "连接服务器失败", "错误", JOptionPane.ERROR_MESSAGE);
         }
     }
     public static void main(String[] args) {

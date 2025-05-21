@@ -1,4 +1,5 @@
 package telecommunicate;
+import info.*;
 import io.FileIO;
 import java.io.DataInputStream;
 import java.io.File;
@@ -7,13 +8,10 @@ import java.io.IOException;
 import java.net.Socket;
 
 import Frame.ServerWindow;
-import info.Chat_info;
+
 import java.util.*;
 
-import info.Group_info;
-import info.Login_info;
 import io.IOStream;
-import info.encap_info;
 
 import javax.swing.*;
 
@@ -104,6 +102,20 @@ public class ServerHandler extends Thread {
                     }else{//如果不是建立群聊，那么是对文件中进行修改
 
                     }
+                }else if(INFO.get_type()==5) {//收到了注册消息
+                    Reg_info reg = INFO.get_reg_info();
+                    String username = reg.getUsername();
+                    FileIO fileio = new FileIO();
+                    boolean flag = fileio.userExists(username);
+                    if(flag){//已经存在已有用户
+                        reg.setReg_status(2);//注册失败
+                    }else{
+                        reg.setReg_status(1);//注册成功
+                        fileio.writeUser(username,reg.getPassword());
+                    }
+                    RETURN.set_reg_info(reg);
+                    RETURN.set_type(5);
+                    IOStream.writeMessage(socket , RETURN);
                 }
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -146,24 +158,11 @@ public class ServerHandler extends Thread {
         return false;
     }
 
-    public boolean checkUserLogin(Login_info tfi) {
-        try {
+    public boolean checkUserLogin(Login_info tfi) throws IOException {
             String userName = tfi.getUserName();
             String password = tfi.getPassword();
-            FileInputStream fis = new FileInputStream(new File("E:\\java_course_design\\chat\\src\\user.txt"));// 储存用户信息的文件（不用SQL了）
-            DataInputStream dis = new DataInputStream(fis);
-            String row = null;
-            while((row = dis.readLine()) != null) {
-                //从文件中读取的行
-                if((userName+"|"+password).equals(row)) {
-                    System.out.println("服务端：用户名，密码正确");
-                    return true;
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return false;
+            FileIO fileio = new FileIO();
+            return fileio.validateUser(userName,password);
     }
 
     public void sendALL(encap_info INFO){
