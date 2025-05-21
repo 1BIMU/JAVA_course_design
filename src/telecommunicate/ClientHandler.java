@@ -40,6 +40,8 @@ public class ClientHandler extends Thread{
                     if (lg.getLoginSucceessFlag() && chatFrame != null) {
                         chatFrame.updateOnlineUsers(online_users);
                     }
+                } else if(INFO.get_type()==4) {//处理聊天消息
+                    handleChatMessage(INFO.get_chat_info());
                 }
                 System.out.println("客户端" +obj);
                 Thread.sleep(1000);
@@ -49,6 +51,41 @@ public class ClientHandler extends Thread{
         }
     }
 
+    /**
+     * 处理接收到的聊天消息
+     * @param chatInfo 聊天信息对象
+     */
+    private void handleChatMessage(Chat_info chatInfo) {
+        if (chatFrame != null) {
+            // 格式化消息显示
+            String formattedMessage = formatChatMessage(chatInfo);
+            // 调用聊天窗口的方法显示消息
+            chatFrame.displayMessage(formattedMessage);
+        }
+    }
+
+    /**
+     * 格式化聊天消息，添加发送者和时间信息
+     * @param chatInfo 聊天信息对象
+     * @return 格式化后的消息字符串
+     */
+    private String formatChatMessage(Chat_info chatInfo) {
+        // 获取当前时间
+        String timeStamp = new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+        
+        // 根据消息类型构建不同的格式
+        if (chatInfo.isType()) { // 群聊消息
+            return String.format("[%s] %s (群聊): %s", 
+                    timeStamp, 
+                    chatInfo.getFrom_username(), 
+                    chatInfo.getMessage());
+        } else { // 私聊消息
+            return String.format("[%s] %s (私聊): %s", 
+                    timeStamp, 
+                    chatInfo.getFrom_username(), 
+                    chatInfo.getMessage());
+        }
+    }
 
     private void loginResult(Login_info lg) {
         if (lg.getLoginSucceessFlag()) {
