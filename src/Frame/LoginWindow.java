@@ -119,7 +119,7 @@ public class LoginWindow extends JFrame {
         try {
             encap_info INFO = new encap_info();
             INFO.set_reg_info(reg);  // 假设有设置注册信息的方法
-            INFO.set_type(4);                 // 假设4表示注册类型
+            INFO.set_type(5);                 // 假设5表示注册类型
 
             Socket socket = new Socket("127.0.0.1", 6688);
             IOStream.writeMessage(socket, INFO);

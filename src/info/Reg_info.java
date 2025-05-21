@@ -1,6 +1,9 @@
 package info;
-
-public class Reg_info {
+import java.io.Serializable;
+import java.io.Serial;
+public class Reg_info implements Serializable {
+    @Serial
+            private static final long serialVersionUID = 5425677582818600106L;
     String username;
     String password;
     int reg_status;//当前注册状态，0为注册中，1为注册成功，2为注册失败(用户名错误)
