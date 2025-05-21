@@ -1,10 +1,9 @@
 package telecommunicate;
 import info.*;
 import io.FileIO;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
+
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.Socket;
 
 import Frame.ServerWindow;
@@ -12,8 +11,6 @@ import Frame.ServerWindow;
 import java.util.*;
 
 import io.IOStream;
-
-import javax.swing.*;
 
 public class ServerHandler extends Thread {
 
@@ -36,98 +33,15 @@ public class ServerHandler extends Thread {
                 encap_info INFO = (encap_info)obj;
                 encap_info RETURN = new encap_info();
                 if(INFO.get_type()==3) {//处理login消息
-                    Login_info tfi = INFO.get_login_info();
-                    this.current_user = tfi.getUserName();
-                    boolean flag = checkUserLogin(tfi);
-                    tfi.setLoginSucceessFlag(false);
-                    if(flag) {
-                        //返回登录成功给客户端
-                        this.server.add_online_user(tfi.getUserName());
-                        this.server.add_online_socket(socket);
-                        server.userSocketMap.put(tfi.getUserName(), socket);
-                        tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
-                        tfi.setLoginSucceessFlag(true);
-                        RETURN.set_login_info(tfi);
-                        RETURN.set_type(3);
-                        sendALL(INFO);//通知所有人，该用户已上线
-
-                    }else {
-                        System.out.println("登录失败");//暂时先这么写，后续封装消息
-                        //返回登录失败给客户端
-                        RETURN.set_login_info(tfi);
-                        RETURN.set_type(3);
-                        IOStream.writeMessage(socket , RETURN);
-                        break;//登录失败了就关闭这个线程，节省资源
+                    if(!Login_handler(INFO,RETURN)){//如果登录失败
+                        break;
                     }
                 }else if(INFO.get_type()==4) {//收到一条消息
-                    Chat_info ci = INFO.get_chat_info();
-                    boolean flag = false;
-                    for(int i = 0;i<ci.getTo_username().length;i++) {//先检查，自己是不是别人发的对象
-                        if(current_user.equals(ci.getTo_username()[i])) {
-                            flag = true;
-                        }
-                    }
-                    if(!flag) continue;//直接丢掉这个包，它不属于我QAQ
-                    String []valid_user = vaild_user_check(ci);//得到有效的用户长度
-                    if(valid_user.length==0){//如果里面啥都没有
-                        ci.setTransfer_status(false);
-                    }else{
-                        ci.setTransfer_status(true);
-                    }
-                    ci.setTo_username(valid_user);
-                    RETURN.set_chat_info(ci);
-                    RETURN.set_type(4);
-                    IOStream.writeMessage(socket , RETURN);//发送相关信息给对应的客户端
+                    Chat_handler(INFO,RETURN);
                 }else if(INFO.get_type()==1) {//如果收到的消息为群聊控制消息
-                    Group_info gi = INFO.get_group_info();
-                    if(gi.isEstablish()==true){//如果是建立群聊的消息
-                        FileIO fileio = new FileIO();
-                        ArrayList<String> to_user = gi.get_added_people();
-                        //为这个群聊分配一个随机ID
-                        int ID;
-                        while(true){
-                            Random rand = new Random();
-                            int randomInt = rand.nextInt();
-                            if (!fileio.groupExists(randomInt)){//如果生成的ID并非已存在，那么跳出循环
-                                ID = randomInt;
-                                break;
-                            }
-                        }
-                        //写入服务端的数据文件中
-                        fileio.writeGroup(ID,to_user);
-                        //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
-                        gi.set_Group_id(ID);
-                        Send2Users(INFO,to_user);
-                    }else{//如果不是建立群聊，那么是对文件中进行修改
-                        FileIO fileio = new FileIO();
-                        ArrayList<String> added_people = gi.get_added_people();
-                        ArrayList<String> removed_people = gi.get_removed_people();
-                        fileio.manageGroupMembers(gi.get_Group_id(),added_people,removed_people);
-                        //然后发消息，通知added_people被添加
-                        Group_info added = gi;
-                        added.setExist(true);
-                        RETURN.set_group_info(added);
-                        Send2Users(INFO,added_people);
-                        //发消息，告诉removed_people被删除
-                        Group_info removed = gi;
-                        removed.setExist(false);
-                        RETURN.set_group_info(removed);
-                        Send2Users(INFO,removed_people);
-                    }
+                    Group_handler(INFO,RETURN);
                 }else if(INFO.get_type()==5) {//收到了注册消息
-                    Reg_info reg = INFO.get_reg_info();
-                    String username = reg.getUsername();
-                    FileIO fileio = new FileIO();
-                    boolean flag = fileio.userExists(username);
-                    if(flag){//已经存在已有用户
-                        reg.setReg_status(2);//注册失败
-                    }else{
-                        reg.setReg_status(1);//注册成功
-                        fileio.writeUser(username,reg.getPassword());
-                    }
-                    RETURN.set_reg_info(reg);
-                    RETURN.set_type(5);
-                    IOStream.writeMessage(socket , RETURN);
+                    REG_handler(INFO,RETURN);
                 }
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -138,38 +52,110 @@ public class ServerHandler extends Thread {
         }
 
     }
-
-    public String[] vaild_user_check(Chat_info ci){//这里需要统计在线人数，然后对在线人数列表进行遍历
-        //解包
-        try{
-
-            String from_user = ci.getFrom_username();
-            String[] to_user = ci.getTo_username();
-            List<String> avaliable_user = new ArrayList<>();
-            String message = ci.getMessage();
-            for(int i=0;i<to_user.length;i++) {//循环遍历到达用户的数组
-                if(!isonline(to_user[i])){//检查是否每个用户都在线
-
-                }else{
-                    avaliable_user.add(to_user[i]);
+    private boolean Login_handler(encap_info INFO, encap_info RETURN) throws IOException {
+        Login_info tfi = INFO.get_login_info();
+        this.current_user = tfi.getUserName();
+        boolean flag = checkUserLogin(tfi);
+        tfi.setLoginSucceessFlag(false);
+        if(flag) {
+            //返回登录成功给客户端
+            this.server.add_online_user(tfi.getUserName());
+            this.server.add_online_socket(socket);
+            server.userSocketMap.put(tfi.getUserName(), socket);
+            tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
+            tfi.setLoginSucceessFlag(true);
+            RETURN.set_login_info(tfi);
+            RETURN.set_type(3);
+            sendALL(INFO);//通知所有人，该用户已上线
+            return true;
+        }else {
+            System.out.println("登录失败");//暂时先这么写，后续封装消息
+            //返回登录失败给客户端
+            RETURN.set_login_info(tfi);
+            RETURN.set_type(3);
+            IOStream.writeMessage(socket , RETURN);
+            return false;
+        }
+    }
+    private void Chat_handler(encap_info INFO, encap_info RETURN) throws IOException {
+        Chat_info ci = INFO.get_chat_info();
+        ci.setTransfer_status(true);
+        FileIO FI = new FileIO();
+        if(ci.isType()){//如果是群聊消息
+            ArrayList<String> group_members = FI.getGroupMembers(ci.getChat_id());//通过id获取需要转发的成员列表
+            filterOnlineMembers(group_members,this.server.online_users);//过滤一下非在线的人
+            //已经确定要转发给谁了，那么就封装一下消息吧
+            RETURN.set_chat_info(ci);
+            RETURN.set_type(4);
+            Send2Users(RETURN, group_members);
+        }else{//如果是私聊消息
+            String to_user = ci.get_to_user();
+            if(this.server.online_users.contains(to_user)) {//如果在线的话
+                RETURN.set_chat_info(ci);
+                RETURN.set_type(4);
+                Socket socket = server.userSocketMap.get(to_user);
+                IOStream.writeMessage(socket , RETURN);//直接发消息了
+                IOStream.writeMessage(this.socket , RETURN);//给自己也得回一个
+            }else{//如果不在线，给自己回一个发送失败
+                ci.setTransfer_status(false);
+                RETURN.set_chat_info(ci);
+                RETURN.set_type(4);
+                IOStream.writeMessage(this.socket , RETURN);//给自己
+            }
+        }
+    }
+    private void REG_handler(encap_info INFO,encap_info RETURN) throws IOException {
+        Reg_info reg = INFO.get_reg_info();
+        String username = reg.getUsername();
+        FileIO fileio = new FileIO();
+        boolean flag = fileio.userExists(username);
+        if(flag){//已经存在已有用户
+            reg.setReg_status(2);//注册失败
+        }else{
+            reg.setReg_status(1);//注册成功
+            fileio.writeUser(username,reg.getPassword());
+        }
+        RETURN.set_reg_info(reg);
+        RETURN.set_type(5);
+        IOStream.writeMessage(socket , RETURN);
+    }
+    private void Group_handler(encap_info INFO,encap_info RETURN) throws IOException {
+        Group_info gi = INFO.get_group_info();
+        if(gi.isEstablish()){//如果是建立群聊的消息
+            FileIO fileio = new FileIO();
+            ArrayList<String> to_user = gi.get_added_people();
+            //为这个群聊分配一个随机ID
+            int ID;
+            while(true){
+                Random rand = new Random();
+                int randomInt = rand.nextInt();
+                if (!fileio.groupExists(randomInt)){//如果生成的ID并非已存在，那么跳出循环
+                    ID = randomInt;
+                    break;
                 }
             }
-            return avaliable_user.toArray(new String[0]);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            //写入服务端的数据文件中
+            fileio.writeGroup(ID,to_user);
+            //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
+            gi.set_Group_id(ID);
+            Send2Users(INFO,to_user);
+        }else{//如果不是建立群聊，那么是对文件中进行修改
+            FileIO fileio = new FileIO();
+            ArrayList<String> added_people = gi.get_added_people();
+            ArrayList<String> removed_people = gi.get_removed_people();
+            fileio.manageGroupMembers(gi.get_Group_id(),added_people,removed_people);
+            //然后发消息，通知added_people被添加
+            Group_info added = gi;
+            added.setExist(true);
+            RETURN.set_group_info(added);
+            Send2Users(INFO,added_people);
+            //发消息，告诉removed_people被删除
+            Group_info removed = gi;
+            removed.setExist(false);
+            RETURN.set_group_info(removed);
+            Send2Users(INFO,removed_people);
         }
-
     }
-
-    private boolean isonline(String user) throws IOException {
-        for(int i = 0;i<this.server.online_users.size();i++) {
-            if(user.equals(this.server.online_users.get(i))){
-                return true;
-            }
-        }
-        return false;
-    }
-
     public boolean checkUserLogin(Login_info tfi) throws IOException {
             String userName = tfi.getUserName();
             String password = tfi.getPassword();
@@ -183,7 +169,13 @@ public class ServerHandler extends Thread {
             IOStream.writeMessage(tempSocket , INFO);
         }
     }
+    public void filterOnlineMembers(ArrayList<String> group_members, ArrayList<String> online_users) {
+        // 将在线用户列表转为 HashSet 提高查找效率
+        Set<String> onlineSet = new HashSet<>(online_users);
 
+        // 使用 removeIf 方法过滤不在线成员（Java 8+ 特性）
+        group_members.removeIf(member -> !onlineSet.contains(member));
+    }
     public void Send2Users(encap_info INFO,ArrayList<String> to_user){
         for(int i = 0;i<to_user.size();i++) {
             //先从hashmap中拿到对应用户的socket

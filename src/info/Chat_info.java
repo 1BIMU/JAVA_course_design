@@ -6,8 +6,10 @@ public class Chat_info implements Serializable {
     @Serial
             private static final long serialVersionUID = -5761256693412260126L;
     String message;//消息主体
+    boolean type;//标记是私聊消息还是群聊消息，如果为0，那么是私聊消息，如果为1，那么是群聊消息
     String from_username;//当前用户
-    String[] to_username;//给到那些用户，需要包含from_username
+    String to_user;//给到那些用户，需要包含from_username
+
     int chat_id;//当前群聊的ID
     boolean transfer_status;
     public Chat_info() {
@@ -24,11 +26,11 @@ public class Chat_info implements Serializable {
     public void setFrom_username(String from_username) {
         this.from_username = from_username;
     }
-    public String[] getTo_username() {
-        return to_username;
+    public String get_to_user() {
+        return to_user;
     }
-    public void setTo_username(String[] to_username) {
-        this.to_username = to_username;
+    public void setTo_username(String to_user) {
+        this.to_user = to_user;
     }
     public boolean getTransfer_status() {
         return transfer_status;
@@ -41,6 +43,12 @@ public class Chat_info implements Serializable {
     }
     public void setChat_id(int chat_id) {
         this.chat_id = chat_id;
+    }
+    public boolean isType() {
+        return type;
+    }
+    public void setType(boolean type) {
+        this.type = type;
     }
 }
 
