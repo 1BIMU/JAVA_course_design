@@ -82,14 +82,14 @@ public class ServerHandler extends Thread {
         ci.setTransfer_status(true);
         FileIO FI = new FileIO();
         if(ci.isType()){//如果是群聊消息
-            ArrayList<String> group_members = FI.getGroupMembers(ci.getChat_id());//通过id获取需要转发的成员列表
+            ArrayList<String> group_members = FI.getGroupMembers(ci.getGroup_id());//通过id获取需要转发的成员列表
             filterOnlineMembers(group_members,this.server.online_users);//过滤一下非在线的人
             //已经确定要转发给谁了，那么就封装一下消息吧
             RETURN.set_chat_info(ci);
             RETURN.set_type(4);
             Send2Users(RETURN, group_members);
         }else{//如果是私聊消息
-            String to_user = ci.get_to_user();
+            String to_user = ci.getTo_username();
             if(this.server.online_users.contains(to_user)) {//如果在线的话
                 RETURN.set_chat_info(ci);
                 RETURN.set_type(4);
