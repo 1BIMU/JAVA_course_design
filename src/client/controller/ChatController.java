@@ -1,10 +1,10 @@
 package client.controller;
 
 import java.io.IOException;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
+import client.MessageSender;
 import client.model.ClientModel;
 import client.view.ChatView;
 import info.Chat_info;
@@ -20,16 +20,16 @@ import io.IOStream;
     聊天控制器，处理聊天相关的业务逻辑
 */
 public class ChatController {
-    private Socket socket;    // 与服务器连接的Socket
-    private ClientModel model; // 客户端数据模型
-    private ChatView chatView; // 聊天视图
+    private ClientModel model;
+    private ChatView chatView;
+    private MessageSender messageSender; // 替代原来的Socket
     
     /*
         构造函数
     */
-    public ChatController(Socket socket, ClientModel model) {
-        this.socket = socket;
+    public ChatController(ClientModel model, MessageSender messageSender) {
         this.model = model;
+        this.messageSender = messageSender;
     }
     
     /*
@@ -50,29 +50,24 @@ public class ChatController {
         }
         
         try {
-            // 创建聊天信息对象
-            Chat_info chatInfo = new Chat_info();
-            chatInfo.setType(isGroupChat); // true表示群聊，false表示私聊
-            chatInfo.setFrom_username(model.getCurrentUser());
-            chatInfo.setMessage(message);
-            
-            if (isGroupChat) {
-                // 群聊消息
-                chatInfo.setGroup_id(Integer.parseInt(targetId));
-            } else {
-                // 私聊消息
-                chatInfo.setTo_username(targetId);
-            }
-            
-            // 创建封装信息对象
-            encap_info info = new encap_info();
-            info.set_type(4); // 聊天消息类型
-            info.set_chat_info(chatInfo);
-            
-            // 发送消息
-            boolean success = IOStream.writeMessage(socket, info);
+            System.out.println("发送消息 - 当前用户: " + model.getCurrentUser());
+            // 使用MessageSender发送聊天消息
+            boolean success = messageSender.sendChatMessage(
+                model.getCurrentUser(), message, isGroupChat, targetId);
             
             if (success) {
+                // 创建聊天信息对象用于本地历史记录
+                Chat_info chatInfo = new Chat_info();
+                chatInfo.setType(isGroupChat);
+                chatInfo.setFrom_username(model.getCurrentUser());
+                chatInfo.setMessage(message);
+                
+                if (isGroupChat) {
+                    chatInfo.setGroup_id(Integer.parseInt(targetId));
+                } else {
+                    chatInfo.setTo_username(targetId);
+                }
+                
                 // 添加到本地消息历史
                 model.addMessage(chatInfo);
                 
@@ -111,20 +106,8 @@ public class ChatController {
             members.add(model.getCurrentUser());
         }
         
-        // 创建群组信息对象
-        Group_info groupInfo = new Group_info();
-        groupInfo.set_Group_name(groupName);
-        groupInfo.setMembers(new ArrayList<>(members));
-        groupInfo.setEstablish(true); // 新建群组
-        groupInfo.setExist(true);
-        
-        // 创建封装信息对象
-        encap_info info = new encap_info();
-        info.set_type(1); // 群组消息类型
-        info.set_group_info(groupInfo);
-        
-        // 发送创建群组请求
-        boolean success = IOStream.writeMessage(socket, info);
+        // 使用MessageSender发送创建群组请求
+        boolean success = messageSender.sendCreateGroupRequest(groupName, members);
         
         if (!success && chatView != null) {
             chatView.showError("创建群组失败");
@@ -135,18 +118,8 @@ public class ChatController {
         退出群组
     */
     public void leaveGroup(int groupId) {
-        // 创建群组信息对象
-        Group_info groupInfo = new Group_info();
-        groupInfo.set_Group_id(groupId);
-        groupInfo.setExist(false); // 退出群组
-        
-        // 创建封装信息对象
-        encap_info info = new encap_info();
-        info.set_type(1); // 群组消息类型
-        info.set_group_info(groupInfo);
-        
-        // 发送退出群组请求
-        boolean success = IOStream.writeMessage(socket, info);
+        // 使用MessageSender发送退出群组请求
+        boolean success = messageSender.sendLeaveGroupRequest(groupId);
         
         if (!success && chatView != null) {
             chatView.showError("退出群组失败");
@@ -176,21 +149,9 @@ public class ChatController {
         // 添加新成员
         newMembers.add(username);
         
-        // 创建群组信息对象
-        Group_info groupInfo = new Group_info();
-        groupInfo.set_Group_id(groupId);
-        groupInfo.set_Group_name(currentGroup.get_Group_name());
-        groupInfo.setMembers(newMembers);
-        groupInfo.setEstablish(false); // 不是新建群组
-        groupInfo.setExist(true);
-        
-        // 创建封装信息对象
-        encap_info info = new encap_info();
-        info.set_type(1); // 群组消息类型
-        info.set_group_info(groupInfo);
-        
-        // 发送更新群组请求
-        boolean success = IOStream.writeMessage(socket, info);
+        // 使用MessageSender发送更新群组请求
+        boolean success = messageSender.sendUpdateGroupRequest(
+            groupId, currentGroup.get_Group_name(), newMembers);
         
         if (!success && chatView != null) {
             chatView.showError("添加用户到群组失败");
@@ -220,21 +181,9 @@ public class ChatController {
         // 移除成员
         newMembers.remove(username);
         
-        // 创建群组信息对象
-        Group_info groupInfo = new Group_info();
-        groupInfo.set_Group_id(groupId);
-        groupInfo.set_Group_name(currentGroup.get_Group_name());
-        groupInfo.setMembers(newMembers);
-        groupInfo.setEstablish(false); // 不是新建群组
-        groupInfo.setExist(true);
-        
-        // 创建封装信息对象
-        encap_info info = new encap_info();
-        info.set_type(1); // 群组消息类型
-        info.set_group_info(groupInfo);
-        
-        // 发送更新群组请求
-        boolean success = IOStream.writeMessage(socket, info);
+        // 使用MessageSender发送更新群组请求
+        boolean success = messageSender.sendUpdateGroupRequest(
+            groupId, currentGroup.get_Group_name(), newMembers);
         
         if (!success && chatView != null) {
             chatView.showError("从群组移除用户失败");
@@ -326,12 +275,8 @@ public class ChatController {
         处理客户端退出逻辑
     */
     public void logout() {
-        // 创建登出消息
-        encap_info info = new encap_info();
-        info.set_type(2); // 登出消息类型
-        
-        // 发送登出请求
-        boolean success = IOStream.writeMessage(socket, info);
+        // 使用MessageSender发送登出请求
+        boolean success = messageSender.sendLogoutRequest();
         
         if (!success && chatView != null) {
             chatView.showError("登出失败");
@@ -391,12 +336,8 @@ public class ChatController {
         通知服务器客户端将要断开连接
     */
     public void notifyServerDisconnect() {
-        // 创建断开连接消息
-        encap_info info = new encap_info();
-        info.set_type(6); // 假设6为断开连接消息类型
-        
-        // 发送断开连接请求
-        boolean success = IOStream.writeMessage(socket, info);
+        // 使用MessageSender发送断开连接通知
+        boolean success = messageSender.sendDisconnectNotification();
         
         if (!success) {
             // 断开连接时出错，但我们即将关闭应用程序，所以只记录错误

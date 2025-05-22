@@ -28,6 +28,7 @@ public class Client implements LoginCallback {
     private ChatController chatController; // 聊天控制器
     private ChatView chatView; // 聊天视图
     private MessageListener messageListener;
+    private MessageSender messageSender; // 新增
     
     /*
         初始化客户端
@@ -45,11 +46,14 @@ public class Client implements LoginCallback {
             this.socket = new Socket(host, port);
             System.out.println("连接到服务器: " + host + ":" + port);
             
-            // 初始化控制器
-            this.loginController = new LoginController(socket, model);
+            // 创建消息发送器
+            this.messageSender = new MessageSender(socket);
+            
+            // 初始化控制器，传入消息发送器而不是Socket
+            this.loginController = new LoginController(model, messageSender);
             this.loginController.setLoginCallback(this);
             
-            this.chatController = new ChatController(socket, model);
+            this.chatController = new ChatController(model, messageSender);
             
             // 启动消息监听线程
             this.messageListener = new MessageListener(socket, model, loginController, chatController);

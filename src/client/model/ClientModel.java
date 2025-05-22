@@ -81,6 +81,7 @@ public class ClientModel {
         设置当前用户
     */
     public void setCurrentUser(String username) {
+        System.out.println("设置当前用户: " + username + " (原用户: " + this.currentUser + ")");
         this.currentUser = username;
         notifyObservers(UpdateType.CURRENT_USER);
     }

@@ -139,18 +139,33 @@ public class MessageListener extends Thread {
     private void handleLoginMessage(Login_info loginInfo) {
         if (loginInfo == null) return;
         
-        // 更新在线用户列表
+        System.out.println("收到登录消息: " + 
+            "用户名=" + loginInfo.getUserName() + 
+            ", 成功标志=" + loginInfo.getLoginSucceessFlag() + 
+            ", 当前用户=" + model.getCurrentUser());
+        
+        // 更新在线用户列表 - 这个对所有登录消息都需要做
         model.setOnlineUsers(loginInfo.getOnlineUsers());
         
-        // 处理登录结果
-        if (loginInfo.getLoginSucceessFlag()) {
-            // 登录成功
-            model.setCurrentUser(loginInfo.getUserName());
-            model.setLoggedIn(true);
-            loginController.onLoginSuccess();
+        // 如果当前客户端还没有登录用户，这可能是我们的登录响应
+        if (model.getCurrentUser() == null || !model.isLoggedIn()) {
+            // 第一次登录的情况
+            if (loginInfo.getLoginSucceessFlag()) {
+                model.setCurrentUser(loginInfo.getUserName());
+                model.setLoggedIn(true);
+                loginController.onLoginSuccess();
+            } else {
+                // 登录失败
+                loginController.onLoginFailure("用户名或密码错误");
+            }
+        } else if (model.getCurrentUser().equals(loginInfo.getUserName())) {
+            // 这是对当前用户的确认消息，只需确认登录状态
+            if (loginInfo.getLoginSucceessFlag()) {
+                model.setLoggedIn(true);
+            }
         } else {
-            // 登录失败
-            loginController.onLoginFailure("用户名或密码错误");
+            // 这是其他用户的登录通知，只更新在线用户列表，不改变当前用户
+            // 已经在上面更新了在线用户列表，这里无需额外操作
         }
     }
     
