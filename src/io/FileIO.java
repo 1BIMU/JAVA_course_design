@@ -25,6 +25,13 @@ public class FileIO {
     public FileIO(String userFile, String groupFile) {
         this.userFilePath = Paths.get(userFile);
         this.groupFilePath = Paths.get(groupFile);
+        
+        // 确保文件存在
+        try {
+            ensureFilesExist();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     // region 用户相关操作
@@ -99,9 +106,62 @@ public class FileIO {
                 .findFirst()
                 .map(line -> {
                     String[] parts = line.split("\\|");
+                    if (parts.length < 2 || parts[1].isEmpty()) {
+                        return new ArrayList<String>();
+                    }
                     return new ArrayList<>(Arrays.asList(parts[1].split(",")));
                 })
                 .orElse(null);
+    }
+    
+    /*
+        更新群组成员列表
+    */
+    public void updateGroupMembers(int groupId, ArrayList<String> members) throws IOException {
+        // 读取现有群组数据
+        List<String> groups = Files.exists(groupFilePath) ?
+                Files.readAllLines(groupFilePath) :
+                new ArrayList<>();
+
+        // 查找目标群组
+        boolean found = false;
+        for (int i = 0; i < groups.size(); i++) {
+            String line = groups.get(i);
+            if (line.startsWith(groupId + "|")) {
+                found = true;
+                // 更新记录
+                groups.set(i, groupId + "|" + String.join(",", members));
+                break;
+            }
+        }
+
+        if (!found) {
+            // 如果群组不存在，则创建新记录
+            groups.add(groupId + "|" + String.join(",", members));
+        }
+
+        // 写回文件
+        Files.write(groupFilePath, groups,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+    }
+    
+    /*
+        删除群组
+    */
+    public void deleteGroup(int groupId) throws IOException {
+        // 读取现有群组数据
+        List<String> groups = Files.exists(groupFilePath) ?
+                Files.readAllLines(groupFilePath) :
+                new ArrayList<>();
+
+        // 移除目标群组
+        groups.removeIf(line -> line.startsWith(groupId + "|"));
+
+        // 写回文件
+        Files.write(groupFilePath, groups,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
     }
     // endregion
 
@@ -115,6 +175,7 @@ public class FileIO {
         }
     }
     // endregion
+    
     public void manageGroupMembers(int groupId, ArrayList<String> addUsers, ArrayList<String> removeUsers) throws IOException {
         // 读取现有群组数据
         List<String> groups = Files.exists(groupFilePath) ?
@@ -129,17 +190,27 @@ public class FileIO {
                 found = true;
                 // 解析现有成员
                 String[] parts = line.split("\\|");
-                ArrayList<String> members = new ArrayList<>(Arrays.asList(parts[1].split(",")));
+                ArrayList<String> members;
+                
+                if (parts.length < 2 || parts[1].isEmpty()) {
+                    members = new ArrayList<>();
+                } else {
+                    members = new ArrayList<>(Arrays.asList(parts[1].split(",")));
+                }
 
                 // 添加新成员（去重）
-                for (String user : addUsers) {
-                    if (!members.contains(user)) {
-                        members.add(user);
+                if (addUsers != null) {
+                    for (String user : addUsers) {
+                        if (!members.contains(user)) {
+                            members.add(user);
+                        }
                     }
                 }
 
                 // 移除指定成员
-                members.removeAll(removeUsers);
+                if (removeUsers != null) {
+                    members.removeAll(removeUsers);
+                }
 
                 // 更新记录
                 groups.set(i, groupId + "|" + String.join(",", members));
@@ -148,7 +219,12 @@ public class FileIO {
         }
 
         if (!found) {
-            throw new IllegalArgumentException("群组 " + groupId + " 不存在");
+            // 如果群组不存在，则创建新记录（仅当有添加用户时）
+            if (addUsers != null && !addUsers.isEmpty()) {
+                groups.add(groupId + "|" + String.join(",", addUsers));
+            } else {
+                throw new IllegalArgumentException("群组 " + groupId + " 不存在");
+            }
         }
 
         // 写回文件
