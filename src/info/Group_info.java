@@ -8,8 +8,8 @@ public class Group_info implements Serializable {//该info用于封装群聊类�
     private String name;//群聊的名称
     private int group_id;//唯一识别id
     private ArrayList<String> members; // 群组成员列表
-    private ArrayList<String> added_people;
-    private ArrayList<String> removed_people;
+    private ArrayList<String> added_people;//添加成员
+    private ArrayList<String> removed_people;//删去该成员
     private boolean establish;//是否为新建立的群聊
     private boolean exist;//用于告知用户，你是否还存在于这个群聊中
     

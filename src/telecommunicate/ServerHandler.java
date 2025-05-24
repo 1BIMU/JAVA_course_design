@@ -77,6 +77,7 @@ public class ServerHandler extends Thread {
             return false;
         }
     }
+
     private void Chat_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Chat_info ci = INFO.get_chat_info();
         ci.setTransfer_status(true);
@@ -123,7 +124,7 @@ public class ServerHandler extends Thread {
         Group_info gi = INFO.get_group_info();
         if(gi.isEstablish()){//如果是建立群聊的消息
             FileIO fileio = new FileIO();
-            ArrayList<String> to_user = gi.get_added_people();
+            ArrayList<String> to_user = gi.getMembers();
             //为这个群聊分配一个随机ID
             int ID;
             while(true){
@@ -135,6 +136,9 @@ public class ServerHandler extends Thread {
                 }
             }
             //写入服务端的数据文件中
+            System.out.println(ID);
+            System.out.println(to_user);//为什么这里收到的to_user是Null??
+
             fileio.writeGroup(ID,to_user);
             //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
             gi.set_Group_id(ID);

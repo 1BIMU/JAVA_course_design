@@ -5,8 +5,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class FileIO {
@@ -17,7 +20,11 @@ public class FileIO {
     // 文件路径配置
     private final Path userFilePath;
     private final Path groupFilePath;
-
+    // 聊天记录文件默认配置
+    private static final String GROUP_CHAT_DIR = "chat_group_history";
+    private static final String SINGLE_CHAT_DIR = "chat_single_history";
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     public FileIO() {
         this(DEFAULT_USERS_FILE, DEFAULT_GROUPS_FILE);
     }
@@ -25,10 +32,12 @@ public class FileIO {
     public FileIO(String userFile, String groupFile) {
         this.userFilePath = Paths.get(userFile);
         this.groupFilePath = Paths.get(groupFile);
-        
+
         // 确保文件存在
         try {
             ensureFilesExist();
+            Files.createDirectories(Paths.get(GROUP_CHAT_DIR));
+            Files.createDirectories(Paths.get(SINGLE_CHAT_DIR));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -259,6 +268,64 @@ public class FileIO {
             return true;
         }
         return false;
+    }
+    // region 统一聊天记录管理
+    /**
+     * 通用聊天记录保存方法
+     * @param chatInfo 包含完整消息信息的对象
+     */
+    public synchronized void saveChatMessage(info.Chat_info chatInfo) throws IOException {
+        String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
+        String record = String.join("|",
+                timestamp,
+                chatInfo.getFrom_username(),
+                chatInfo.getMessage()
+        );
+
+        if (chatInfo.isType()) {
+            // 群聊消息
+            Path groupFile = Paths.get(GROUP_CHAT_DIR,
+                    chatInfo.getGroup_id() + ".dat");
+            Files.write(groupFile, (record + "\n").getBytes(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } else {
+            // 私聊消息
+            String[] users = {chatInfo.getFrom_username(), chatInfo.getTo_username()};
+            Arrays.sort(users); // 保证文件名一致性
+            Path privateFile = Paths.get(SINGLE_CHAT_DIR,
+                    users[0] + "_" + users[1] + ".dat");
+            Files.write(privateFile, (record + "\n").getBytes(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        }
+    }
+
+    /**
+     * 获取聊天历史记录
+     * @param chatInfo 包含查询条件的对象
+     * @return 按时间排序的消息列表
+     */
+    public List<String> getChatHistory(info.Chat_info chatInfo) throws IOException {
+        Path chatFile;
+
+        if (chatInfo.isType()) {
+            // 群聊记录路径
+            chatFile = Paths.get(GROUP_CHAT_DIR,
+                    chatInfo.getGroup_id() + ".dat");
+        } else {
+            // 私聊记录路径
+            String[] users = {chatInfo.getFrom_username(), chatInfo.getTo_username()};
+            Arrays.sort(users);
+            chatFile = Paths.get(SINGLE_CHAT_DIR,
+                    users[0] + "_" + users[1] + ".dat");
+        }
+
+        if (!Files.exists(chatFile)) {
+            return Collections.emptyList();
+        }
+
+        return Files.readAllLines(chatFile);
     }
 }
 

@@ -81,6 +81,7 @@ public class MessageSender {
         Group_info groupInfo = new Group_info();
         groupInfo.set_Group_name(groupName);
         groupInfo.setMembers(new ArrayList<>(members));
+        System.out.println(members);//让我看看怎么个事
         groupInfo.setEstablish(true);
         groupInfo.setExist(true);
         
