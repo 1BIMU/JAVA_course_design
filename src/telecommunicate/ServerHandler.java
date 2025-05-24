@@ -42,6 +42,13 @@ public class ServerHandler extends Thread {
                     Group_handler(INFO,RETURN);
                 }else if(INFO.get_type()==5) {//收到了注册消息
                     REG_handler(INFO,RETURN);
+                }else if(INFO.get_type()==2) {//如果是登出类型消息
+                    //维护相关动态表格
+                    this.server.userSocketMap.remove(current_user);
+                    this.server.online_users.remove(current_user);
+                    this.server.online_sockets.remove(socket);
+                    //都登出了，就不会接受返回消息了，就不返回了，主要是懒得再写个返回消息了，麻烦
+                    break;
                 }
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
