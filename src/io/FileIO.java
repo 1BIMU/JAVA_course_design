@@ -107,6 +107,30 @@ public class FileIO {
                 });
     }
 
+    public ArrayList<Integer> getGroupsByUser(String username) throws IOException {
+        ArrayList<Integer> groupIds = new ArrayList<>();
+
+        if (!Files.exists(groupFilePath)) {
+            return groupIds;
+        }
+
+        Files.lines(groupFilePath).forEach(line -> {
+            String[] parts = line.split("\\|", 2);
+            if (parts.length == 2) {
+                try {
+                    int groupId = Integer.parseInt(parts[0]);
+                    List<String> members = Arrays.asList(parts[1].split(","));
+                    if (members.contains(username)) {
+                        groupIds.add(groupId);
+                    }
+                } catch (NumberFormatException e) {
+                    // 忽略格式错误的群组ID
+                }
+            }
+        });
+
+        return groupIds;
+    }
     public ArrayList<String> getGroupMembers(int groupId) throws IOException {
         if (!Files.exists(groupFilePath)) return null;
 
@@ -172,9 +196,7 @@ public class FileIO {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING);
     }
-    // endregion
 
-    // region 工具方法
     private void ensureFilesExist() throws IOException {
         if (!Files.exists(userFilePath)) {
             Files.createFile(userFilePath);
