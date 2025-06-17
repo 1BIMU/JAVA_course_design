@@ -3,6 +3,7 @@ package Server.view;
 import javax.swing.*;
 import java.awt.*;
 import java.io.Serial;
+import java.util.ArrayList;
 //服务器端主界面
 public class ServerWindow extends JFrame {
     public static final int WIDTH = 550;
@@ -11,6 +12,13 @@ public class ServerWindow extends JFrame {
     private static final long serialVersionUID = 8659545959675588211L;
     public JLabel UserPanel;
     public JPanel ServerInfo;
+    
+    // 添加组件引用，便于后续更新
+    private JTextPane txtLog;
+    private JTextField txtNumber;
+    private JList<String> userList;
+    private DefaultListModel<String> userListModel;
+    
     public ServerWindow() {
         initializeUI();
         setupComponents();
@@ -23,6 +31,7 @@ public class ServerWindow extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         centerWindow();
     }
+    
     public JPanel getServerInfoPanel(){
         //整个第一个选项服务板，包括日志区域 一整个大的面板
 
@@ -39,8 +48,8 @@ public class ServerWindow extends JFrame {
         pnlServer.add(lblLog);
 
         //日志区域
-        JTextPane txtLog = new JTextPane();
-        txtLog.setOpaque(false);
+        txtLog = new JTextPane();
+        txtLog.setEditable(false); // 设置为不可编辑
         txtLog.setFont(new Font("宋体", Font.PLAIN, 12));
 
         JScrollPane scoPaneOne = new JScrollPane(txtLog);// 设置滚动条
@@ -50,13 +59,14 @@ public class ServerWindow extends JFrame {
         pnlServer.add(scoPaneOne);
         pnlServer.add(getServerParam());
         return pnlServer;
-
     }
+    
     private void centerWindow() {
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         setLocation((screenSize.width - getWidth()) / 2,
                 (screenSize.height - getHeight()) / 2);
     }
+    
     public JLabel getUserPanel() {
         // 用户面板
         JPanel pnlUser = new JPanel();
@@ -74,20 +84,20 @@ public class ServerWindow extends JFrame {
         pnlUser.add(lblUser);
 
         //用户列表
-        JList User = new JList();
-        User.setFont(new Font("宋体", 0, 14));
-        User.setVisibleRowCount(17);
-        User.setFixedCellWidth(180);
-        User.setFixedCellHeight(18);
-        User.setOpaque(false);
+        userListModel = new DefaultListModel<>();
+        userList = new JList<>(userListModel);
+        userList.setFont(new Font("宋体", 0, 14));
+        userList.setVisibleRowCount(17);
+        userList.setFixedCellWidth(180);
+        userList.setFixedCellHeight(18);
+        userList.setOpaque(false);
 
-        JScrollPane spUser = new JScrollPane(User);
+        JScrollPane spUser = new JScrollPane(userList);
         spUser.setFont(new Font("宋体", 0, 14));
         spUser.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         spUser.setBounds(50, 35, 200, 360);
         spUser.setOpaque(false);
         pnlUser.add(spUser);
-
 
         //创建一个标签并将图片添加进去
         JLabel lblBackground = new JLabel();
@@ -98,6 +108,7 @@ public class ServerWindow extends JFrame {
 
         return lblBackground;
     }
+    
     public JPanel getServerParam(){
         JPanel serverParamPanel = new JPanel();
         serverParamPanel.setOpaque(false);
@@ -111,7 +122,7 @@ public class ServerWindow extends JFrame {
         lblNumber.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblNumber);
 
-        JTextField txtNumber = new JTextField("0 人", 10);
+        txtNumber = new JTextField("0 人", 10);
         txtNumber.setFont(new Font("宋体", 0, 14));
         txtNumber.setEditable(false);
         serverParamPanel.add(txtNumber);
@@ -120,7 +131,7 @@ public class ServerWindow extends JFrame {
         lblServerName.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblServerName);
 
-        JTextField txtServerName = new JTextField(10);
+        JTextField txtServerName = new JTextField("Java聊天室服务器", 10);
         txtServerName.setFont(new Font("宋体", 0, 14));
         txtServerName.setEditable(false);
         serverParamPanel.add(txtServerName);
@@ -129,7 +140,7 @@ public class ServerWindow extends JFrame {
         lblIP.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblIP);
 
-        JTextField txtIP = new JTextField(10);
+        JTextField txtIP = new JTextField("127.0.0.1", 10);
         txtIP.setFont(new Font("宋体", 0, 14));
         txtIP.setEditable(false);
         serverParamPanel.add(txtIP);
@@ -138,12 +149,13 @@ public class ServerWindow extends JFrame {
         lblPort.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblPort);
 
-        JTextField txtPort = new JTextField("展示当前端口" , 10);//拼接一个字符串
+        JTextField txtPort = new JTextField("6688", 10);
         txtPort.setFont(new Font("宋体", 0, 14));
         txtPort.setEditable(false);
         serverParamPanel.add(txtPort);
         return serverParamPanel;
     }
+    
     private void setupComponents() {
         //选项卡
         JTabbedPane Server = new JTabbedPane(JTabbedPane.TOP);
@@ -157,6 +169,46 @@ public class ServerWindow extends JFrame {
 
         this.add(Server);
     }
+    
+    /**
+     * 添加日志消息到服务器日志区域
+     * @param message 日志消息
+     */
+    public void appendMessage(String message) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // 获取当前时间
+                String timestamp = new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+                // 添加时间戳和消息
+                String formattedMessage = "[" + timestamp + "] " + message + "\n";
+                
+                // 添加到日志区域
+                txtLog.getDocument().insertString(txtLog.getDocument().getLength(), formattedMessage, null);
+                // 自动滚动到底部
+                txtLog.setCaretPosition(txtLog.getDocument().getLength());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+    
+    /**
+     * 更新在线用户列表
+     * @param users 在线用户列表
+     */
+    public void updateOnlineUsers(ArrayList<String> users) {
+        SwingUtilities.invokeLater(() -> {
+            // 更新用户列表
+            userListModel.clear();
+            for (String user : users) {
+                userListModel.addElement(user);
+            }
+            
+            // 更新在线人数
+            txtNumber.setText(users.size() + " 人");
+        });
+    }
+    
     public static void main(String[] args) {
         SwingUtilities.invokeLater(()->{
             ServerWindow window = new ServerWindow();
