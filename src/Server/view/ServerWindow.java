@@ -1,12 +1,23 @@
 package Server.view;
 
 import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.StyledDocument;
 import java.awt.*;
 import java.io.Serial;
+import java.util.ArrayList;
+
 //服务器端主界面
 public class ServerWindow extends JFrame {
     public static final int WIDTH = 550;
     public static final int HEIGHT = 500;
+    // 添加 volatile 确保线程可见性
+    private volatile JTextField txtNumber;
+    private volatile JTextField txtServerName;
+    private volatile JTextField txtIP;
+    private volatile JTextField txtPort;
+    private volatile JTextPane txtLog;
+    private volatile JList<String> userList;
     @Serial
     private static final long serialVersionUID = 8659545959675588211L;
     public JLabel UserPanel;
@@ -25,7 +36,6 @@ public class ServerWindow extends JFrame {
     }
     public JPanel getServerInfoPanel(){
         //整个第一个选项服务板，包括日志区域 一整个大的面板
-
         JPanel pnlServer = new JPanel();
         pnlServer.setOpaque(false);
         pnlServer.setLayout(null);
@@ -39,7 +49,7 @@ public class ServerWindow extends JFrame {
         pnlServer.add(lblLog);
 
         //日志区域
-        JTextPane txtLog = new JTextPane();
+        txtLog = new JTextPane();
         txtLog.setOpaque(false);
         txtLog.setFont(new Font("宋体", Font.PLAIN, 12));
 
@@ -74,14 +84,14 @@ public class ServerWindow extends JFrame {
         pnlUser.add(lblUser);
 
         //用户列表
-        JList User = new JList();
-        User.setFont(new Font("宋体", 0, 14));
-        User.setVisibleRowCount(17);
-        User.setFixedCellWidth(180);
-        User.setFixedCellHeight(18);
-        User.setOpaque(false);
+        userList = new JList<>();
+        userList.setFont(new Font("宋体", 0, 14));
+        userList.setVisibleRowCount(17);
+        userList.setFixedCellWidth(180);
+        userList.setFixedCellHeight(18);
+        userList.setOpaque(false);
 
-        JScrollPane spUser = new JScrollPane(User);
+        JScrollPane spUser = new JScrollPane(userList);
         spUser.setFont(new Font("宋体", 0, 14));
         spUser.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         spUser.setBounds(50, 35, 200, 360);
@@ -111,7 +121,7 @@ public class ServerWindow extends JFrame {
         lblNumber.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblNumber);
 
-        JTextField txtNumber = new JTextField("0 人", 10);
+        txtNumber = new JTextField("0 人", 10);
         txtNumber.setFont(new Font("宋体", 0, 14));
         txtNumber.setEditable(false);
         serverParamPanel.add(txtNumber);
@@ -120,7 +130,7 @@ public class ServerWindow extends JFrame {
         lblServerName.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblServerName);
 
-        JTextField txtServerName = new JTextField(10);
+        txtServerName = new JTextField(10);
         txtServerName.setFont(new Font("宋体", 0, 14));
         txtServerName.setEditable(false);
         serverParamPanel.add(txtServerName);
@@ -129,7 +139,7 @@ public class ServerWindow extends JFrame {
         lblIP.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblIP);
 
-        JTextField txtIP = new JTextField(10);
+        txtIP = new JTextField(10);
         txtIP.setFont(new Font("宋体", 0, 14));
         txtIP.setEditable(false);
         serverParamPanel.add(txtIP);
@@ -138,7 +148,7 @@ public class ServerWindow extends JFrame {
         lblPort.setFont(new Font("宋体", 0, 14));
         serverParamPanel.add(lblPort);
 
-        JTextField txtPort = new JTextField("展示当前端口" , 10);//拼接一个字符串
+        txtPort = new JTextField("展示当前端口" , 10);//拼接一个字符串
         txtPort.setFont(new Font("宋体", 0, 14));
         txtPort.setEditable(false);
         serverParamPanel.add(txtPort);
@@ -156,6 +166,70 @@ public class ServerWindow extends JFrame {
         Server.add("在线用户",UserPanel);
 
         this.add(Server);
+    }
+
+    public void updateUserList(ArrayList<String> users) {
+        SwingUtilities.invokeLater(() -> {
+            String[] userArray = users.toArray(new String[0]);
+            userList.setListData(userArray);
+            txtNumber.setText(users.size() + " 人");
+        });
+    }
+
+    /**
+     * 添加日志消息
+     * @param message 日志内容（自动添加换行）
+     */
+    public void appendLog(String message) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // 获取当前时间并格式化为 [yyyy-MM-dd HH:mm:ss]
+                String timestamp = new java.text.SimpleDateFormat("[yyyy-MM-dd HH:mm:ss] ")
+                        .format(new java.util.Date());
+
+                StyledDocument doc = txtLog.getStyledDocument();
+
+                // 插入带时间戳的消息
+                doc.insertString(doc.getLength(), timestamp + message + "\n", null);
+
+                // 自动滚动到底部（取消注释以启用）
+                txtLog.setCaretPosition(doc.getLength());
+            } catch (BadLocationException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    /**
+     * 设置服务器基础信息
+     * @param name 服务器名称
+     * @param ip 服务器IP地址
+     * @param port 服务器端口号
+     */
+    public void setServerInfo(String name, String ip, int port) {
+        SwingUtilities.invokeLater(() -> {
+            txtServerName.setText(name);
+            txtIP.setText(ip);
+            txtPort.setText(String.valueOf(port));  // 修改这里直接设置端口号
+        });
+    }
+    /**
+     * 清空日志区域
+     */
+    public void clearLog() {
+        SwingUtilities.invokeLater(() -> {
+            txtLog.setText("");
+        });
+    }
+
+    /**
+     * 清空用户列表
+     */
+    public void clearUserList() {
+        SwingUtilities.invokeLater(() -> {
+            userList.setListData(new String[0]);
+            txtNumber.setText("0 人");
+        });
     }
     public static void main(String[] args) {
         SwingUtilities.invokeLater(()->{

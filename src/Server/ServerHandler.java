@@ -20,7 +20,7 @@ public class ServerHandler extends Thread {
         this.socket = socket;
         this.server = server;
         this.ServerFrame = serverframe;
-        controller = new ServerController(socket, server);
+        controller = new ServerController(socket, server,serverframe);
     }
     //实例化Controller
 
