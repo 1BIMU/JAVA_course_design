@@ -30,7 +30,7 @@ public class ChatServer {// 服务器启动入口
                 Socket socket = sso.accept();
                 ServerHandler serverHandler = new ServerHandler(socket,this,ServerFrame);//开启一个新的线程，用于服务这个连接上的用户
                 serverHandler.start();
-                System.out.println("服务器接受到客户端的连接：" + socket);
+                ServerFrame.appendLog("服务器接受到客户端的连接：" + socket);
             }
         } catch (IOException e) {
             e.printStackTrace();
