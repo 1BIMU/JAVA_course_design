@@ -34,6 +34,8 @@ public class ClientModel {
     private Map<Integer, Group_info> groups;   //TODO: 这里的具体逻辑待服务端实现
     // 聊天消息历史记录
     private List<Chat_info> messageHistory;   //TODO:这里的具体逻辑待服务端实现
+    // 最新的聊天消息
+    private Chat_info lastChatMessage;
     // 登录状态
     private boolean loggedIn;
     
@@ -93,6 +95,13 @@ public class ClientModel {
         return currentUser;
     }
     
+    /**
+     * 获取当前用户名（别名方法，与ChatController保持一致）
+     */
+    public String getCurrentUsername() {
+        return currentUser;
+    }
+    
     /*
         更新在线用户列表
     */
@@ -103,7 +112,7 @@ public class ClientModel {
         } else {
             this.onlineUsers = new ArrayList<>();
         }
-        notifyObservers(UpdateType.ONLINE_USERS);
+        notifyObservers(UpdateType.USERS);
     }
     
     /*
@@ -141,7 +150,8 @@ public class ClientModel {
     */
     public void addMessage(Chat_info message) {
         messageHistory.add(message);
-        notifyObservers(UpdateType.MESSAGES);
+        lastChatMessage = message;
+        notifyObservers(UpdateType.CHAT);
     }
     
     /*
@@ -149,6 +159,13 @@ public class ClientModel {
     */
     public List<Chat_info> getMessageHistory() {
         return new ArrayList<>(messageHistory);
+    }
+    
+    /**
+     * 获取最新的聊天消息
+     */
+    public Chat_info getLastChatMessage() {
+        return lastChatMessage;
     }
     
     /*
@@ -174,6 +191,7 @@ public class ClientModel {
         onlineUsers.clear();
         groups.clear();
         messageHistory.clear();
+        lastChatMessage = null;
         loggedIn = false;
         notifyObservers(UpdateType.ALL);
     }
@@ -182,12 +200,12 @@ public class ClientModel {
         模型的所有更新类型
     */
     public enum UpdateType {
-        CURRENT_USER,
-        ONLINE_USERS,
-        GROUPS,
-        MESSAGES,
-        LOGIN_STATUS,
-        ALL
+        CURRENT_USER,  // 当前用户更新
+        USERS,         // 用户列表更新
+        GROUPS,        // 群组信息更新
+        CHAT,          // 聊天消息更新
+        LOGIN_STATUS,  // 登录状态更新
+        ALL           // 全部更新
     }
     
     /*

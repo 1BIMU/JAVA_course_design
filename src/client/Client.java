@@ -8,7 +8,7 @@ import client.controller.ChatController;
 import client.controller.LoginController;
 import client.controller.LoginController.LoginCallback;
 import client.model.ClientModel;
-import client.view.ChatView;
+import client.view.ContactListView;
 
 /* 
     一些边写边学的记录：
@@ -26,7 +26,7 @@ public class Client implements LoginCallback {
     private ClientModel model; // 客户端数据模型
     private LoginController loginController; // 登录控制器
     private ChatController chatController; // 聊天控制器
-    private ChatView chatView; // 聊天视图
+    private ContactListView contactListView; // 联系人列表视图
     private MessageListener messageListener;
     private MessageSender messageSender; // 新增
     
@@ -89,6 +89,11 @@ public class Client implements LoginCallback {
     */
     public void disconnect() {
         try {
+            // 执行聊天控制器的清理工作，保存聊天记录
+            if (chatController != null) {
+                chatController.cleanup();
+            }
+            
             // 停止消息监听线程
             if (messageListener != null) {
                 messageListener.stopListening();
@@ -149,42 +154,42 @@ public class Client implements LoginCallback {
 
     /*
         实现LoginCallback接口的onLoginSuccess方法
-        当用户登录成功时，创建聊天视图并显示
+        当用户登录成功时，创建联系人列表视图并显示
     */
     @Override
     public void onLoginSuccess() {
-        // 创建聊天视图
-        chatView = new ChatView(chatController);
-        
-        // 设置视图引用
-        chatController.setChatView(chatView);
+        // 创建联系人列表视图
+        contactListView = new ContactListView(chatController, model, model.getCurrentUser());
         
         // 注册模型观察者
-        model.addObserver(chatView);
+        model.addObserver(contactListView);
         
         // 初始化视图数据
-        chatView.updateUserList();
-        chatView.updateGroupList();
+        contactListView.updateUserList();
+        contactListView.updateGroupList();
         
-        // 显示聊天视图
-        chatView.setVisible(true);
+        // 显示联系人列表视图
+        contactListView.setVisible(true);
+        
+        // 设置状态为在线
+        contactListView.updateStatus("在线");
     }
     
     /*
         实现LoginCallback接口的onLogout方法
-        当用户登出时，关闭聊天视图
+        当用户登出时，关闭联系人列表视图
     */
     @Override
     public void onLogout() {
         // 移除模型观察者
-        if (chatView != null) {
-            model.removeObserver(chatView);
+        if (contactListView != null) {
+            model.removeObserver(contactListView);
         }
         
-        // 关闭聊天视图
-        if (chatView != null) {
-            chatView.dispose();
-            chatView = null;
+        // 关闭联系人列表视图
+        if (contactListView != null) {
+            contactListView.dispose();
+            contactListView = null;
         }
         
         // 显示登录界面

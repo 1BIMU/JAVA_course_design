@@ -2,6 +2,7 @@ package client.controller;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import client.MessageSender;
@@ -9,6 +10,7 @@ import client.model.ClientModel;
 import client.view.ChatView;
 import info.Chat_info;
 import info.Group_info;
+import io.FileIO;
 
 /*
     一些说明：通过视图中的接口与视图组件进行交互
@@ -192,8 +194,32 @@ public class ChatController {
         处理新接收到的消息
     */
     public void onNewMessage(Chat_info chatInfo) {
-        if (chatView != null) {
-            chatView.displayMessage(formatChatMessage(chatInfo));
+        // 检查这条消息是否是由当前用户发送的
+        // 如果是当前用户发送的消息，不再添加到模型中，因为在sendMessage方法中已经添加过了
+        boolean isFromCurrentUser = chatInfo.getFrom_username().equals(model.getCurrentUser());
+        
+        if (!isFromCurrentUser) {
+            // 只有当消息不是由当前用户发送的时候才添加到模型
+            // 这样可以避免消息被添加两次
+            model.addMessage(chatInfo);
+            saveMessageToFile(chatInfo);
+        } else {
+            System.out.println("跳过添加当前用户的消息，避免重复显示");
+        }     
+    }
+    
+    /**
+     * 实时保存单条聊天消息到文件
+     * @param chatInfo 聊天消息信息
+     */
+    private void saveMessageToFile(Chat_info chatInfo) {
+        try {
+            FileIO fileIO = new FileIO();
+            fileIO.saveChatMessage(chatInfo);
+            System.out.println("聊天记录已实时保存");
+        } catch (IOException e) {
+            System.err.println("保存聊天记录失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
@@ -285,52 +311,6 @@ public class ChatController {
     }
     
     /*
-        保存聊天记录
-    */
-    public void saveMessageHistory() {
-        try {
-            // 获取聊天历史
-            List<Chat_info> messageHistory = model.getMessageHistory();
-            
-            // 如果没有消息，则不需要保存
-            if (messageHistory.isEmpty()) {
-                return;
-            }
-            
-            // 创建保存目录
-            java.io.File dir = new java.io.File("chat_history");
-            if (!dir.exists()) {
-                dir.mkdir();
-            }
-            
-            // 创建文件名（使用当前用户名和时间戳）
-            String fileName = "chat_history/" + model.getCurrentUser() + "_" 
-                    + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".txt";
-            
-            // 创建文件输出流
-            java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(fileName));
-            
-            // 写入聊天记录
-            for (Chat_info message : messageHistory) {
-                writer.println(formatChatMessage(message));
-            }
-            
-            // 关闭文件
-            writer.close();
-            
-            if (chatView != null) {
-                chatView.showMessage("聊天记录已保存至 " + fileName);
-            }
-            
-        } catch (IOException e) {
-            if (chatView != null) {
-                chatView.showError("保存聊天记录失败: " + e.getMessage());
-            }
-            e.printStackTrace();
-        }
-    }
-    
-    /*
         通知服务器客户端将要断开连接
     */
     public void notifyServerDisconnect() {
@@ -347,13 +327,61 @@ public class ChatController {
         执行退出前的所有清理工作
     */
     public void cleanup() {
-        // 保存聊天记录
-        saveMessageHistory();
-        
         // 通知服务器断开连接
         notifyServerDisconnect();
         
         // 发送登出消息
         logout();
+    }
+    
+    /**
+     * 获取当前登录用户名
+     */
+    public String getCurrentUsername() {
+        return model.getCurrentUsername();
+    }
+    
+    /**
+     * 发送私聊消息
+     * @param targetUser 目标用户
+     * @param message 消息内容
+     */
+    public void sendPrivateMessage(String targetUser, String message) {
+        sendMessage(message, false, targetUser);
+    }
+    
+    /**
+     * 发送群聊消息
+     * @param groupId 群组ID
+     * @param message 消息内容
+     */
+    public void sendGroupMessage(String groupId, String message) {
+         sendMessage(message, true, groupId);
+    }
+    
+    /**
+     * 加载聊天历史记录
+     * @param chatInfo 聊天信息
+     * @param callback 历史记录回调
+     */
+    public void loadChatHistory(Chat_info chatInfo, HistoryCallback callback) {
+        // 创建新线程加载历史记录
+        new Thread(() -> {
+            try {
+                FileIO fileIO = new FileIO();
+                List<String> history = fileIO.getChatHistory(chatInfo);
+                callback.onHistoryLoaded(history);
+            } catch (IOException e) {
+                e.printStackTrace();
+                callback.onHistoryLoaded(Collections.emptyList());
+            }
+        }).start();
+    }
+    
+    /**
+     * 历史记录回调接口
+     */
+    public interface HistoryCallback {
+        void onHistoryLoaded(List<String> history);
     }
 } 

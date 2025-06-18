@@ -27,8 +27,8 @@ public class ChatMessageHandler implements ClientMessageHandler {
         Chat_info chatInfo = message.get_chat_info();
         if (chatInfo == null) return;
         
-        // 添加消息到历史记录
-        model.addMessage(chatInfo);
+        // 不需要在这里添加消息到历史记录，因为onNewMessage方法会做这件事
+        // model.addMessage(chatInfo);
         
         // 通知聊天控制器处理新消息
         chatController.onNewMessage(chatInfo);
