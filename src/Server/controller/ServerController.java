@@ -28,8 +28,8 @@ public class ServerController {
     }
     public boolean Login_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Login_info tfi = INFO.get_login_info();
-        this.current_user = tfi.getUserName();
         ServerFrame.appendLog("尝试登录用户: " + tfi.getUserName());
+        this.current_user = tfi.getUserName();
         FileIO FI = new FileIO();
         FileIO FI_org = new FileIO("users.dat","orgs.dat");
         boolean flag = model.checkUserLogin(tfi);
@@ -38,7 +38,7 @@ public class ServerController {
         if(flag) {
             //返回登录成功给客户端
             ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录成功");
-            tfi.setLoginSuccessFlag(true);
+            this.current_user = tfi.getUserName(); // 只有登录成功才设置当前用户
             this.server.add_online_socket(socket);
             if(isOline) {//如果用户已经上线了，那么需要把原来的socket干掉，然后发送一条被踢出的信息
                 ServerFrame.appendLog("用户 "+ tfi.getUserName() + "已经在线，踢出原设备消息已发送");
@@ -96,7 +96,8 @@ public class ServerController {
         }else {
             ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录失败");
             //返回登录失败给客户端
-            tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
+            // 即使登录失败，也需要设置在线用户列表，避免客户端出现NullPointerException
+            tfi.setOnlineUsers(server.online_users);
             RETURN.set_login_info(tfi);
             RETURN.set_type(3);
 

@@ -57,6 +57,7 @@ public class Client implements LoginCallback {
             
             // 启动消息监听线程
             this.messageListener = new MessageListener(socket, model, loginController, chatController);
+            this.messageListener.setMessageSender(messageSender);
             this.messageListener.start();
             
             return true;
