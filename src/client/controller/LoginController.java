@@ -65,10 +65,6 @@ public class LoginController {
             loginView.showError("密码不能为空");
             return;
         }
-
-        // 预设用户名，但标记为未登录
-        model.setCurrentUser(username);
-        model.setLoggedIn(false);
         
         // 使用MessageSender发送登录请求
         boolean success = messageSender.sendLoginRequest(username, password);

@@ -6,11 +6,9 @@ import java.net.SocketException;
 
 import client.controller.ChatController;
 import client.controller.LoginController;
+import client.handler.ClientMessageHandler;
+import client.handler.ClientMessageHandlerFactory;
 import client.model.ClientModel;
-import info.Chat_info;
-import info.Group_info;
-import info.Login_info;
-import info.Reg_info;
 import info.encap_info;
 import io.IOStream;
 
@@ -29,28 +27,10 @@ import io.IOStream;
 
 /* 
     消息分发机制：
-        和原来的 ClientHandler 一样：
-            * 根据消息类型（info.get_type()）将消息分发给不同的处理方法
+        使用策略模式重构：
+            * 根据消息类型（info.get_type()）获取对应的处理器
+            * 将消息分发给对应的处理器处理
             * 支持处理多种消息类型：登录(3)、聊天(4)、群组(1)、注册(5)、登出(2)
-*/
-
-
-
-
-/* 
-    一些边写边学的记录：
-        1. 使用 Thread 类创建一个独立线程，持续监听 Socket 输入流：
-            * 其中 Thread 类是 Java 中的一个类，用于创建和管理线程
-                * 通过继承 Thread 类并重写 run() 方法，可以创建一个自定义的线程类
-            * Thread 类提供了一个 run() 方法，用于定义线程的执行逻辑
-                * 在 run() 方法中，可以实现持续监听 Socket 输入流的功能
-                * 当有消息到达时，会调用 handleMessage() 方法进行处理
-            * 通过调用 interrupt() 方法中断线程
-        2. MVC 架构的说明：
-            * 监听器持有对模型和控制器的引用，监听器更新模型数据并通知控制器处理业务逻辑
-            * 模型负责存储和管理数据
-            * 控制器负责处理用户交互逻辑
-            * 视图负责显示数据和接收用户输入
 */
 
 public class MessageListener extends Thread {
@@ -59,6 +39,8 @@ public class MessageListener extends Thread {
     private LoginController loginController; // 登录控制器
     private ChatController chatController; // 聊天控制器
     private boolean running; // 运行标志位
+    private ClientMessageHandlerFactory handlerFactory; // 消息处理器工厂
+    private MessageSender messageSender; // 消息发送器，用于重连
 
     /*
         构造函数
@@ -71,58 +53,81 @@ public class MessageListener extends Thread {
         this.loginController = loginController; // 登录控制器
         this.chatController = chatController; // 聊天控制器
         this.running = true;   // 运行标志位
+        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController);
+    }
+    
+    /**
+     * 设置消息发送器，用于重连
+     */
+    public void setMessageSender(MessageSender messageSender) {
+        this.messageSender = messageSender;
     }
 
     @Override
     public void run() {
-        while (running && !socket.isClosed()) {
+        int reconnectAttempts = 0;
+        final int maxReconnectAttempts = 3;
+        
+        while (running) {
             try {
+                // 检查socket是否关闭
+                if (socket == null || socket.isClosed()) {
+                    handleClosedSocket(reconnectAttempts, maxReconnectAttempts);
+                    reconnectAttempts++;
+                    continue;
+                }
+                
                 // 从Socket读取消息，这会阻塞直到收到消息
                 Object obj = IOStream.readMessage(socket);
-                if (obj == null) continue;
+                if (obj == null) {
+                    System.err.println("收到null消息，可能是连接已关闭");
+                    // 如果连接已关闭，等待重连
+                    Thread.sleep(1000);
+                    continue;
+                }
+                
+                // 重置重连计数
+                reconnectAttempts = 0;
                 
                 // 将消息转换为封装信息对象
                 encap_info info = (encap_info) obj;
                 
-                // 根据消息类型分发处理
-                switch (info.get_type()) {
-                    case 3: // 登录消息
-                        handleLoginMessage(info.get_login_info());
-                        break;
-                    case 4: // 聊天消息
-                        handleChatMessage(info.get_chat_info());
-                        break;
-                    case 1: // 群组消息
-                        handleGroupMessage(info.get_group_info());
-                        break;
-                    case 5: // 注册消息
-                        handleRegisterMessage(info.get_reg_info());
-                        break;
-                    case 2: // 登出消息
-                        handleLogoutMessage();
-                        break;
-                    default:
-                        System.out.println("Warning: 收到未知类型的消息: " + info.get_type());
+                // 获取对应的消息处理器
+                ClientMessageHandler handler = handlerFactory.getHandler(info.get_type());
+                if (handler != null) {
+                    // 如果找到了处理器，则调用它处理消息
+                    handler.handle(info);
+                } else {
+                    System.out.println("Warning: 收到未知类型的消息: " + info.get_type());
                 }
             } catch (ClassCastException e) {
                 // 消息类型转换错误
                 System.err.println("消息格式错误: " + e.getMessage());
+            } catch (InterruptedException e) {
+                // 线程被中断
+                System.err.println("线程被中断: " + e.getMessage());
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
-                // 其他异常，包括网络异常
+                // 其他异常
                 System.err.println("接收消息时发生错误: " + e.getMessage());
                 e.printStackTrace();
                 
-                // 如果是网络相关问题，停止监听
-                if (e instanceof java.net.SocketException || 
-                    e.getCause() instanceof java.net.SocketException) {
-                    System.err.println("网络连接异常，停止监听");
-                    stopListening();
+                // 如果是Socket相关的异常，尝试重连
+                if (e instanceof SocketException || 
+                    (e.getCause() != null && e.getCause() instanceof SocketException)) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
         }
         
         // 线程结束时，释放 Socket 资源
-        if (!socket.isClosed()) {
+        if (socket != null && !socket.isClosed()) {
             try {
                 socket.close();
             } catch (IOException e) {
@@ -133,102 +138,30 @@ public class MessageListener extends Thread {
         System.out.println("消息监听线程已停止");
     }
     
-    /*
-        处理登录结果，更新用户状态
-    */
-    private void handleLoginMessage(Login_info loginInfo) {
-        if (loginInfo == null) return;
-        
-        System.out.println("收到登录消息: " + 
-            "用户名=" + loginInfo.getUserName() + 
-            ", 成功标志=" + loginInfo.getLoginSucceessFlag() + 
-            ", 当前用户=" + model.getCurrentUser());
-        
-        // 更新在线用户列表 - 这个对所有登录消息都需要做
-        model.setOnlineUsers(loginInfo.getOnlineUsers());
-        
-        // 如果当前客户端还没有登录用户，这可能是我们的登录响应
-        if (model.getCurrentUser() == null || !model.isLoggedIn()) {
-            // 第一次登录的情况
-            if (loginInfo.getLoginSucceessFlag()) {
-                model.setCurrentUser(loginInfo.getUserName());
-                model.setLoggedIn(true);
-                loginController.onLoginSuccess();
+    /**
+     * 处理Socket关闭的情况
+     */
+    private void handleClosedSocket(int reconnectAttempts, int maxReconnectAttempts) throws InterruptedException {
+        if (messageSender != null) {
+            // 尝试通过messageSender重连
+            Socket newSocket = messageSender.getSocket();
+            if (newSocket != null && !newSocket.isClosed()) {
+                this.socket = newSocket;
+                System.out.println("MessageListener: 使用MessageSender提供的新Socket");
             } else {
-                // 登录失败
-                loginController.onLoginFailure("用户名或密码错误");
-            }
-        } else if (model.getCurrentUser().equals(loginInfo.getUserName())) {
-            // 这是对当前用户的确认消息，只需确认登录状态
-            if (loginInfo.getLoginSucceessFlag()) {
-                model.setLoggedIn(true);
+                // 如果重连次数超过上限，则停止监听
+                if (reconnectAttempts >= maxReconnectAttempts) {
+                    System.err.println("重连次数超过上限，停止监听");
+                    stopListening();
+                    return;
+                }
+                System.err.println("Socket已关闭，等待重连... 尝试次数: " + (reconnectAttempts + 1));
+                Thread.sleep(2000); // 等待2秒后再次检查
             }
         } else {
-            // 这是其他用户的登录通知，只更新在线用户列表，不改变当前用户
-            // 已经在上面更新了在线用户列表，这里无需额外操作
+            System.err.println("Socket已关闭且无法重连，停止监听");
+            stopListening();
         }
-    }
-    
-    /*
-        处理聊天消息，添加到历史记录
-    */
-    private void handleChatMessage(Chat_info chatInfo) {
-        if (chatInfo == null) return;
-        
-        // 添加消息到历史记录
-        model.addMessage(chatInfo);
-        
-        // 通知聊天控制器处理新消息
-        chatController.onNewMessage(chatInfo);
-    }
-    
-    /*
-        TODO: 处理群组操作
-    */
-    private void handleGroupMessage(Group_info groupInfo) {
-        if (groupInfo == null) return;
-        
-        if (groupInfo.isEstablish()) {
-            // 新建群组
-            model.updateGroup(groupInfo);
-            chatController.onGroupCreated(groupInfo);
-        } else if (!groupInfo.isExist()) {
-            // 被移出群组
-            model.removeGroup(groupInfo.get_Group_id());
-            chatController.onRemovedFromGroup(groupInfo);
-        } else {
-            // 群组更新
-            model.updateGroup(groupInfo);
-            chatController.onGroupUpdated(groupInfo);
-        }
-    }
-    
-    /*
-        处理注册消息
-    */
-    private void handleRegisterMessage(Reg_info regInfo) {
-        if (regInfo == null) return;
-        
-        switch (regInfo.getReg_status()) {
-            case 1: // 注册成功
-                loginController.onRegisterSuccess(regInfo.getUsername());
-                break;
-            case 2: // 注册失败
-                loginController.onRegisterFailure("用户名已存在");
-                break;
-            default:
-                loginController.onRegisterFailure("未知错误");
-        }
-    }
-    
-    /*
-        处理登出消息
-    */
-    private void handleLogoutMessage() {
-        // 清除模型数据
-        model.clear();
-        // 通知登录控制器处理登出
-        loginController.onLogout();
     }
     
     /*
@@ -239,4 +172,11 @@ public class MessageListener extends Thread {
         // 中断线程，如果它在阻塞状态
         this.interrupt();
     }
-} 
+    
+    /**
+     * 更新Socket
+     */
+    public void updateSocket(Socket socket) {
+        this.socket = socket;
+    }
+}

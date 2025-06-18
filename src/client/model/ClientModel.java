@@ -97,7 +97,12 @@ public class ClientModel {
         更新在线用户列表
     */
     public void setOnlineUsers(ArrayList<String> users) {
-        this.onlineUsers = new ArrayList<>(users);
+        // 添加空值检查，避免NullPointerException
+        if (users != null) {
+            this.onlineUsers = new ArrayList<>(users);
+        } else {
+            this.onlineUsers = new ArrayList<>();
+        }
         notifyObservers(UpdateType.ONLINE_USERS);
     }
     
