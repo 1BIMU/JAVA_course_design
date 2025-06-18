@@ -202,14 +202,35 @@ public class ServerController {
         }
     }
     public void LogoutHandler(encap_info INFO, encap_info RETURN) throws IOException {
-
         //维护相关动态表格
         ServerFrame.appendLog("用户 " + current_user + " 正在注销");
+        
+        // 先创建登出通知消息，在移除用户前准备好消息
+        Login_info logoutInfo = new Login_info();
+        logoutInfo.setUserName(current_user);
+        logoutInfo.setLoginSuccessFlag(false); // 设置为false表示用户下线
+        logoutInfo.setOnlineUsers(new ArrayList<>(server.online_users)); // 复制当前在线用户列表
+        
+        // 从在线用户列表中移除当前用户
         this.server.userSocketMap.remove(current_user);
         this.server.online_users.remove(current_user);
-        ServerFrame.updateUserList(server.online_users);//前端页面移除
+        
+        // 更新服务器界面的用户列表
+        ServerFrame.updateUserList(server.online_users);
         this.server.online_sockets.remove(socket);
-        //都登出了，就不会接受返回消息了，就不返回了，主要是懒得再写个返回消息了，麻烦
+        
+        // 更新登出通知消息中的在线用户列表（已移除当前用户）
+        logoutInfo.setOnlineUsers(server.online_users);
+        
+        // 创建广播消息
+        encap_info broadcastInfo = new encap_info();
+        broadcastInfo.set_type(3); // 登录/登出消息类型
+        broadcastInfo.set_login_info(logoutInfo);
+        
+        // 广播用户下线消息给所有在线用户
+        ServerFrame.appendLog("广播用户 " + current_user + " 下线消息给所有在线用户");
+        model.sendALL(broadcastInfo);
+        
         ServerFrame.appendLog("用户 " + current_user + " 已成功注销");
         ServerFrame.appendLog("当前在线用户: " + server.online_users);
     }
