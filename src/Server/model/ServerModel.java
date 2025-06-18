@@ -70,4 +70,24 @@ public class ServerModel {
         }
         return groupMap;
     }
+/*
+* 用于检查，组中是否存在，不在群聊中的人，两个for，比较丑陋
+* */
+    public boolean IsInGroup(ArrayList<String> group_members, ArrayList<String> org_members) {
+        boolean flag = false;//是否存在不在群聊中的人
+        for (String orgMember : org_members) {
+            boolean is_member = false;
+            for (String groupMember : group_members) {
+                if (orgMember.equals(groupMember)) {
+                    is_member = true;//在群中
+                    break;
+                }
+            }
+            if (!is_member) {
+                flag = true;
+                break;
+            }
+        }
+        return flag;
+    }
 }

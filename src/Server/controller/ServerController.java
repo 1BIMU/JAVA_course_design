@@ -215,35 +215,24 @@ public class ServerController {
     }
     public void Org_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Org_info oi = INFO.get_org_info();
+        FileIO fileio_org = new FileIO("users.dat","orgs.dat");//新建的一个组的数据文件
+        FileIO fileio_group = new FileIO();//群消息读取，用于检查群聊是否存在
+        int group_id =  oi.getGroup_id();
+        ArrayList<String> org_members = oi.getMembers();
+        ArrayList<String> group_members = fileio_group.getGroupMembers(group_id);
         if(oi.isEstablish()){//如果是建立组的消息
             ServerFrame.appendLog(current_user + " 尝试创建新群内的组");
-            FileIO fileio_org = new FileIO("users.dat","orgs.dat");//新建的一个组的数据文件
-            FileIO fileio_group = new FileIO();//群消息读取，用于检查群聊是否存在
-            int group_id =  oi.getGroup_id();
-            ArrayList<String> org_members = oi.getMembers();
-            ArrayList<String> group_members = fileio_group.getGroupMembers(group_id);
 
-            boolean flag = false;//是否存在不在群聊中的人
-            for(int i = 0; i < org_members.size(); i++){
-                boolean is_member = false;
-                for(int j = 0; j < group_members.size(); j++){
-                    if(org_members.get(i).equals(group_members.get(j))){
-                        is_member = true;//在群中
-                    }
-                }
-                if(!is_member){
-                    flag = true;
-                }
-            }
+            boolean flag = model.IsInGroup(group_members,org_members);
             if(!fileio_group.groupExists(group_id)||flag){//如果群聊不存在，或者有人不在群聊中，那么告诉它，建立错误就行了
+                ServerFrame.appendLog("错误，在尝试创建成员为： "+ org_members+"的组时发生错误，该群聊不存在，或者组中有人不在群聊中，返回报错信息");
                 oi.setSuccess(false);
                 ArrayList<String> back_user = new ArrayList<>();
                 back_user.add(current_user);
                 RETURN.set_org_info(oi);
                 model.Send2Users(INFO,back_user);
                 return;
-            }
-
+            }else oi.setSuccess(true);
             //为这个群聊分配一个随机ID
             int ID;
             while(true){
@@ -268,6 +257,18 @@ public class ServerController {
             FileIO fileio = new FileIO();
             ArrayList<String> added_people = oi.getAdded_people();
             ArrayList<String> removed_people = oi.getRemoved_people();
+            if(!fileio_group.groupExists(group_id)||
+                    model.IsInGroup(org_members,removed_people)||
+            model.IsInGroup(group_members,added_people)){
+                ServerFrame.appendLog("发生错误，在尝试添加用户 " + added_people + " 并删去用户"+ removed_people +
+                        " 时发生错误");
+                oi.setSuccess(false);
+                ArrayList<String> back_user = new ArrayList<>();
+                back_user.add(current_user);
+                RETURN.set_org_info(oi);
+                model.Send2Users(INFO,back_user);
+                return;
+            }
             fileio.manageGroupMembers(oi.getOrg_id(),added_people,removed_people);
             ServerFrame.appendLog("添加成员: " + added_people);
             //然后发消息，通知added_people被添加
