@@ -29,11 +29,10 @@ public class ServerController {
     public boolean Login_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Login_info tfi = INFO.get_login_info();
         ServerFrame.appendLog("尝试登录用户: " + tfi.getUserName());
-        this.current_user = tfi.getUserName();
         FileIO FI = new FileIO();
         FileIO FI_org = new FileIO("users.dat","orgs.dat");
         boolean flag = model.checkUserLogin(tfi);
-        boolean isOline = model.checkUserOnline(this.current_user,this.server.online_users);//检查该用户是否已上线，支持漫游
+        boolean isOline = model.checkUserOnline(tfi.getUserName(),this.server.online_users);//检查该用户是否已上线，支持漫游
         tfi.setLoginSuccessFlag(false);
         if(flag) {
             //返回登录成功给客户端
@@ -45,6 +44,7 @@ public class ServerController {
                 Socket old_socket = server.userSocketMap.get(this.current_user);
                 ServerHandler oldHandler = server.SocketHandlerMap.get(old_socket);
                 //返回被踢出消息
+                tfi.setLoginSuccessFlag(true);
                 tfi.setKicked(true);
                 tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
                 RETURN.set_login_info(tfi);
@@ -58,7 +58,6 @@ public class ServerController {
                 this.server.remove_online_socket(old_socket);
                 ServerFrame.appendLog("注销  "+ old_socket);
                 this.server.userSocketMap.remove(this.current_user);
-
                 this.server.SocketHandlerMap.remove(old_socket);
                 tfi.setKicked(false);
             }else{//如果并非已经在线，那么
