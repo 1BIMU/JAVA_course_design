@@ -35,7 +35,7 @@ public class ServerHandler extends Thread {
                 encap_info RETURN = new encap_info();
                 if(INFO.get_type()==3) {//处理login消息
                     if(!controller.Login_handler(INFO, RETURN)){//如果登录失败
-                        break;
+                        shutdown();
                     }
                 }else if(INFO.get_type()==4) {//收到一条消息
                     controller.Chat_handler(INFO,RETURN);
@@ -46,6 +46,8 @@ public class ServerHandler extends Thread {
                 }else if(INFO.get_type()==2) {//如果是登出类型消息
                     controller.LogoutHandler(INFO,RETURN);
                     break;
+                }else if(INFO.get_type()==6){
+                    controller.Org_handler(INFO,RETURN);
                 }
                 Thread.sleep(1000);
             } catch (InterruptedException e) {

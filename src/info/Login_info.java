@@ -13,6 +13,11 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的群，包括群ID，群所有成员
     private ArrayList<Integer> groupIDList;
     private Map<Integer,ArrayList<String>> groupMap;
+
+    //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的组信息，包括组ID，组内所有成员
+    private ArrayList<Integer> orgIDList;
+    private Map<Integer,ArrayList<String>> orgMap;
+
     private boolean Kicked = false;//默认为false，标记是否被漫游用户挤下去
     private String userName;
     private String password;
@@ -61,5 +66,17 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     }
     public void setOnlineUsers(ArrayList<String> onlineUsers) {
         this.onlineUsers = onlineUsers;
+    }
+    public void setOrgIDList(ArrayList<Integer> orgIDList) {
+        this.orgIDList = orgIDList;
+    }
+    public ArrayList<Integer> getOrgIDList() {
+        return orgIDList;
+    }
+    public void setOrgMap(Map<Integer,ArrayList<String>> orgMap) {
+        this.orgMap = orgMap;
+    }
+    public Map<Integer,ArrayList<String>> getOrgMap() {
+        return orgMap;
     }
 }

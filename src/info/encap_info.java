@@ -5,11 +5,12 @@ import java.io.Serial;
 public class encap_info implements Serializable {//对各种消息进行封装
     @Serial
     private static final long serialVersionUID = -2664356335109440843L;
-    private int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，5代表注册消息，如果要添加消息，直接在后面改就行
+    private int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，5代表注册消息，6代表组管理消息，如果要添加消息，直接在后面改就行
     private Chat_info chat_info;
     private Group_info group_info;
     private Login_info login_info;
     private Reg_info reg_info;
+    private Org_info org_info;
     
     public Chat_info get_chat_info(){
         return chat_info;
@@ -50,4 +51,12 @@ public class encap_info implements Serializable {//对各种消息进行封装
     public void set_reg_info(Reg_info reg_info) {
         this.reg_info = reg_info;
     }
+
+    public Org_info get_org_info() {
+        return org_info;
+    }
+    public void set_org_info(Org_info org_info) {
+        this.org_info = org_info;
+    }
+
 }

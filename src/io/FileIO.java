@@ -301,7 +301,7 @@ public class FileIO {
         String record = String.join("|",
                 timestamp,
                 chatInfo.getFrom_username(),
-                chatInfo.getMessage()
+                chatInfo.getText()
         );
 
         if (chatInfo.isType()) {

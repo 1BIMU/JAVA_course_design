@@ -59,7 +59,7 @@ public class MessageSender {
         Chat_info chatInfo = new Chat_info();
         chatInfo.setType(isGroupChat);
         chatInfo.setFrom_username(fromUser);
-        chatInfo.setMessage(message);
+        chatInfo.setText(message);
         
         if (isGroupChat) {
             chatInfo.setGroup_id(Integer.parseInt(targetId));

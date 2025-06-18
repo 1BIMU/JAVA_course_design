@@ -9,8 +9,6 @@ import client.model.ClientModel;
 import client.view.ChatView;
 import info.Chat_info;
 import info.Group_info;
-import info.encap_info;
-import io.IOStream;
 
 /*
     一些说明：通过视图中的接口与视图组件进行交互
@@ -60,7 +58,7 @@ public class ChatController {
                 Chat_info chatInfo = new Chat_info();
                 chatInfo.setType(isGroupChat);
                 chatInfo.setFrom_username(model.getCurrentUser());
-                chatInfo.setMessage(message);
+                chatInfo.setText(message);
                 
                 if (isGroupChat) {
                     chatInfo.setGroup_id(Integer.parseInt(targetId));
@@ -241,12 +239,12 @@ public class ChatController {
             return String.format("[%s] %s (群聊): %s", 
                     timeStamp, 
                     chatInfo.getFrom_username(), 
-                    chatInfo.getMessage());
+                    chatInfo.getText());
         } else { // 私聊消息
             return String.format("[%s] %s (私聊): %s", 
                     timeStamp, 
                     chatInfo.getFrom_username(), 
-                    chatInfo.getMessage());
+                    chatInfo.getText());
         }
     }
     
