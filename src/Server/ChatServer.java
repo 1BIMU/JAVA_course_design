@@ -13,6 +13,7 @@ public class ChatServer {// 服务器启动入口
     public ArrayList<String> online_users = new ArrayList<String>();//维护在线用户列表
     public ArrayList<Socket> online_sockets = new ArrayList<Socket>();
     public Map<String,Socket> userSocketMap = new HashMap<>();
+    public Map<Socket,ServerHandler> SocketHandlerMap = new HashMap<>();
     public int port = 6688;
     public String ip;
     public ChatServer() {
@@ -29,7 +30,9 @@ public class ChatServer {// 服务器启动入口
                 //等待连接，阻塞实现，会得到一个客户端的连接
                 Socket socket = sso.accept();
                 ServerHandler serverHandler = new ServerHandler(socket,this,ServerFrame);//开启一个新的线程，用于服务这个连接上的用户
+                SocketHandlerMap.put(socket,serverHandler);
                 serverHandler.start();
+
                 ServerFrame.appendLog("服务器接受到客户端的连接：" + socket);
             }
         } catch (IOException e) {

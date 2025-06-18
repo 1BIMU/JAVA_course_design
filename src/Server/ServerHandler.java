@@ -16,18 +16,19 @@ public class ServerHandler extends Thread {
     ChatServer server;
     ServerWindow ServerFrame;
     ServerController controller;
+    boolean running = true;
     public ServerHandler(Socket socket, ChatServer server, ServerWindow serverframe) {
         this.socket = socket;
         this.server = server;
         this.ServerFrame = serverframe;
-        controller = new ServerController(socket, server,serverframe);
+        controller = new ServerController(socket, server,serverframe,this);
     }
     //实例化Controller
 
     @Override
     public void run() {
         //默认重复拿
-        while(true) {
+        while(running) {
             try {
                 Object obj = IOStream.readMessage(socket);
                 encap_info INFO = (encap_info)obj;
@@ -54,6 +55,12 @@ public class ServerHandler extends Thread {
             }
         }
 
+    }
+
+    public void shutdown() throws IOException {
+        //先关闭线程
+        socket.close();
+        running = false;
     }
 
 }

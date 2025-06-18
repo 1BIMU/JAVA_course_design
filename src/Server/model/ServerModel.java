@@ -19,9 +19,18 @@ public class ServerModel {
         String userName = tfi.getUserName();
         String password = tfi.getPassword();
         FileIO fileio = new FileIO();
-        return fileio.validateUser(userName,password);
+        return fileio.validateUser(userName,password);//用户名密码正确
     }
-
+    public boolean checkUserOnline(String User,ArrayList<String> online_users){
+        boolean flag = false;
+        for(int i = 0;i<online_users.size();i++){
+            if(online_users.get(i).equals(User)){
+                flag = true;
+                break;
+            }
+        }
+        return flag;
+    }
     public void sendALL(encap_info INFO){
         for (int i = 0; i < server.online_sockets.size(); i++) {
             Socket tempSocket = server.online_sockets.get(i);

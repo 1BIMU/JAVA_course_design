@@ -26,7 +26,7 @@ public class MessageSender {
         Login_info loginInfo = new Login_info();
         loginInfo.setUserName(username);
         loginInfo.setPassword(password);
-        loginInfo.setLoginSucceessFlag(false);
+        loginInfo.setLoginSuccessFlag(false);
         
         encap_info info = new encap_info();
         info.set_type(3);

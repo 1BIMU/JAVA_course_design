@@ -2,7 +2,6 @@ package client;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.net.SocketException;
 
 import client.controller.ChatController;
 import client.controller.LoginController;
@@ -13,6 +12,8 @@ import info.Login_info;
 import info.Reg_info;
 import info.encap_info;
 import io.IOStream;
+
+import javax.swing.*;
 
 /*
     消息监听器，负责接收和处理后端，即服务器发送的消息
@@ -138,10 +139,21 @@ public class MessageListener extends Thread {
     */
     private void handleLoginMessage(Login_info loginInfo) {
         if (loginInfo == null) return;
-        
+        if (loginInfo.isKicked()){
+            JOptionPane.showMessageDialog(
+                    null,                     // 父组件（null表示居中显示）
+                    "您已在其他设备登录",      // 错误消息内容
+                    "错误",                   // 窗口标题
+                    JOptionPane.ERROR_MESSAGE // 消息类型（显示错误图标）
+            );
+            chatController.cleanup();
+            running = false;
+            System.exit(0);
+            return;
+        }
         System.out.println("收到登录消息: " + 
             "用户名=" + loginInfo.getUserName() + 
-            ", 成功标志=" + loginInfo.getLoginSucceessFlag() + 
+            ", 成功标志=" + loginInfo.getLoginSuccessFlag() +
             ", 当前用户=" + model.getCurrentUser());
         
         // 更新在线用户列表 - 这个对所有登录消息都需要做
@@ -150,7 +162,7 @@ public class MessageListener extends Thread {
         // 如果当前客户端还没有登录用户，这可能是我们的登录响应
         if (model.getCurrentUser() == null || !model.isLoggedIn()) {
             // 第一次登录的情况
-            if (loginInfo.getLoginSucceessFlag()) {
+            if (loginInfo.getLoginSuccessFlag()) {
                 model.setCurrentUser(loginInfo.getUserName());
                 model.setLoggedIn(true);
                 loginController.onLoginSuccess();
@@ -160,7 +172,7 @@ public class MessageListener extends Thread {
             }
         } else if (model.getCurrentUser().equals(loginInfo.getUserName())) {
             // 这是对当前用户的确认消息，只需确认登录状态
-            if (loginInfo.getLoginSucceessFlag()) {
+            if (loginInfo.getLoginSuccessFlag()) {
                 model.setLoggedIn(true);
             }
         } else {
@@ -187,7 +199,7 @@ public class MessageListener extends Thread {
     */
     private void handleGroupMessage(Group_info groupInfo) {
         if (groupInfo == null) return;
-        
+
         if (groupInfo.isEstablish()) {
             // 新建群组
             model.updateGroup(groupInfo);

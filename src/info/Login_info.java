@@ -13,13 +13,19 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的群，包括群ID，群所有成员
     private ArrayList<Integer> groupIDList;
     private Map<Integer,ArrayList<String>> groupMap;
-
+    private boolean Kicked = false;//默认为false，标记是否被漫游用户挤下去
     private String userName;
     private String password;
     private ArrayList<String> onlineUsers;
     //登录成功标志
-    private Boolean loginSucceessFlag = false;
+    private Boolean loginSuccessFlag = false;
 
+    public void setKicked(boolean kicked) {
+        Kicked = kicked;
+    }
+    public boolean isKicked() {
+        return Kicked;
+    }
     public void setGroupIDList(ArrayList<Integer> groupIDList) {
         this.groupIDList = groupIDList;
     }
@@ -32,11 +38,11 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     public ArrayList<Integer> getGroupIDList() {
         return groupIDList;
     }
-    public Boolean getLoginSucceessFlag() {
-        return loginSucceessFlag;
+    public Boolean getLoginSuccessFlag() {
+        return loginSuccessFlag;
     }
-    public void setLoginSucceessFlag(Boolean loginSucceessFlag) {
-        this.loginSucceessFlag = loginSucceessFlag;
+    public void setLoginSuccessFlag(Boolean loginSuccessFlag) {
+        this.loginSuccessFlag = loginSuccessFlag;
     }
     public String getUserName() {
         return userName;

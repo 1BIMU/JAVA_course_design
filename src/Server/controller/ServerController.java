@@ -1,4 +1,5 @@
 package Server.controller;
+import Server.ServerHandler;
 import Server.view.ServerWindow;
 import Server.ChatServer;
 import info.*;
@@ -14,13 +15,15 @@ public class ServerController {
     Socket socket;
     ChatServer server;
     ServerWindow ServerFrame;
+    ServerHandler ServerHandler;
     //实例化model
     ServerModel model;
     String current_user;//标记当前线程服务的用户
-    public ServerController(Socket socket, ChatServer server,ServerWindow ServerFrame) {//定义构造方法
+    public ServerController(Socket socket, ChatServer server, ServerWindow ServerFrame, ServerHandler handler) {//定义构造方法
         this.socket = socket;
         this.server = server;
         this.ServerFrame = ServerFrame;
+        this.ServerHandler = handler;
         model = new ServerModel(server);
     }
     public boolean Login_handler(encap_info INFO, encap_info RETURN) throws IOException {
@@ -29,22 +32,52 @@ public class ServerController {
         ServerFrame.appendLog("尝试登录用户: " + tfi.getUserName());
         FileIO FI = new FileIO();
         boolean flag = model.checkUserLogin(tfi);
-        tfi.setLoginSucceessFlag(false);
+        boolean isOline = model.checkUserOnline(this.current_user,this.server.online_users);//检查该用户是否已上线，支持漫游
+        tfi.setLoginSuccessFlag(false);
         if(flag) {
             //返回登录成功给客户端
             ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录成功");
-            this.server.add_online_user(tfi.getUserName());
+            tfi.setLoginSuccessFlag(true);
             this.server.add_online_socket(socket);
+            if(isOline) {//如果用户已经上线了，那么需要把原来的socket干掉，然后发送一条被踢出的信息
+                ServerFrame.appendLog("用户 "+ tfi.getUserName() + "已经在线，踢出原设备消息已发送");
+                Socket old_socket = server.userSocketMap.get(this.current_user);
+                ServerHandler oldHandler = server.SocketHandlerMap.get(old_socket);
+                //返回被踢出消息
+                tfi.setKicked(true);
+                tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
+                RETURN.set_login_info(tfi);
+                RETURN.set_type(3);
+                IOStream.writeMessage(old_socket, RETURN);
+                //服务端数据注销
+                ServerFrame.appendLog("服务端数据开始注销");
+                ServerFrame.appendLog("开始关闭线程"+oldHandler);
+                oldHandler.shutdown();//关闭原有线程
+                ServerFrame.appendLog("旧线程关闭成功");
+                this.server.remove_online_socket(old_socket);
+                ServerFrame.appendLog("注销  "+ old_socket);
+                this.server.userSocketMap.remove(this.current_user);
+
+                this.server.SocketHandlerMap.remove(old_socket);
+                tfi.setKicked(false);
+            }else{//如果并非已经在线，那么
+                server.add_online_user(tfi.getUserName());
+                ServerFrame.appendLog("更新在线用户列表: " + server.online_users);
+                tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
+
+                //更新前端页面
+                ServerFrame.updateUserList(server.online_users);
+                //消息设置和封装
+                tfi.setLoginSuccessFlag(true);
+                RETURN.set_login_info(tfi);
+                RETURN.set_type(3);
+                ServerFrame.appendLog("通知所有用户 " + tfi.getUserName() + " 已上线");
+                model.sendALL(INFO);//通知所有人，该用户已上线
+            }
+            //服务端记录该用户信息
             server.userSocketMap.put(tfi.getUserName(), socket);
-            ServerFrame.appendLog("更新在线用户列表: " + server.online_users);
-            tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
-            //更新前端页面
-            ServerFrame.updateUserList(server.online_users);
-            tfi.setLoginSucceessFlag(true);
-            RETURN.set_login_info(tfi);
-            RETURN.set_type(3);
-            ServerFrame.appendLog("通知所有用户 " + tfi.getUserName() + " 已上线");
-            model.sendALL(INFO);//通知所有人，该用户已上线
+
+            //发送所有的群聊信息给该用户
             ArrayList<Integer> groups = FI.getGroupsByUser(tfi.getUserName());//获得所有和该用户相关的groupID的表
             Map<Integer,ArrayList<String>> groupMap = model.groupMap(groups);
             tfi.setGroupMap(groupMap);
