@@ -11,6 +11,7 @@ import client.controller.ChatController;
 import client.model.ClientModel;
 import client.model.ClientModel.ModelObserver;
 import client.model.ClientModel.UpdateType;
+import info.Chat_info;
 import info.Group_info;
 
 /**
@@ -443,6 +444,9 @@ public class ContactListView extends JFrame implements ModelObserver {
             chatView.setVisible(true);
             chatView.toFront();
             chatView.requestFocus();
+            
+            // 将该用户的未读消息标记为已读
+            model.markMessagesAsRead(false, username);
         } else {
             // 创建新的聊天窗口
             ChatView chatView = new ChatView(controller, model, false, username, username);
@@ -454,6 +458,9 @@ public class ContactListView extends JFrame implements ModelObserver {
             });
             privateChatWindows.put(username, chatView);
             chatView.setVisible(true);
+            
+            // 将该用户的未读消息标记为已读
+            model.markMessagesAsRead(false, username);
         }
     }
 
@@ -468,6 +475,9 @@ public class ContactListView extends JFrame implements ModelObserver {
             chatView.setVisible(true);
             chatView.toFront();
             chatView.requestFocus();
+            
+            // 将该群组的未读消息标记为已读
+            model.markMessagesAsRead(true, String.valueOf(groupId));
         } else {
             // 创建新的聊天窗口
             ChatView chatView = new ChatView(controller, model, true, String.valueOf(groupId), group.getName());
@@ -479,6 +489,9 @@ public class ContactListView extends JFrame implements ModelObserver {
             });
             groupChatWindows.put(groupId, chatView);
             chatView.setVisible(true);
+            
+            // 将该群组的未读消息标记为已读
+            model.markMessagesAsRead(true, String.valueOf(groupId));
         }
     }
 
@@ -565,6 +578,10 @@ public class ContactListView extends JFrame implements ModelObserver {
                 break;
             case CHAT:
                 // 聊天消息由各聊天窗口处理
+                // 但我们需要更新联系人列表以显示未读消息状态
+                updateUserList();
+                // 同时更新群组列表，显示群聊未读消息
+                updateGroupList();
                 break;
         }
     }
@@ -618,12 +635,25 @@ public class ContactListView extends JFrame implements ModelObserver {
             JPanel infoPanel = new JPanel(new BorderLayout());
             infoPanel.setOpaque(false);
             
+            // 检查是否有未读消息
+            boolean hasUnread = false;
+            final int unreadCount;
+            if (!username.equals(currentUsername)) {
+                java.util.List<Chat_info> unreadMessages = model.getUnreadMessages(false, username);
+                unreadCount = unreadMessages.size();
+                hasUnread = unreadCount > 0;
+            } else {
+                unreadCount = 0;
+            }
+            
+            // 创建用户名标签，如果有未读消息，添加提示
             JLabel nameLabel = new JLabel(username);
             nameLabel.setFont(new Font("宋体", Font.BOLD, 14));
             
-            JLabel statusLabel = new JLabel(isOnline ? "在线" : "离线");
-            statusLabel.setFont(new Font("宋体", Font.PLAIN, 12));
-            statusLabel.setForeground(isOnline ? new Color(0, 128, 0) : Color.GRAY);
+            if (hasUnread) {
+                nameLabel.setText(username + " [" + unreadCount + "条新消息]");
+                nameLabel.setForeground(new Color(255, 0, 0)); // 红色显示
+            }
             
             // 如果是当前用户，特殊标记
             if (username.equals(currentUsername)) {
@@ -631,11 +661,43 @@ public class ContactListView extends JFrame implements ModelObserver {
                 nameLabel.setForeground(new Color(0, 102, 204));
             }
             
+            // 创建状态标签
+            JLabel statusLabel = new JLabel(isOnline ? "在线" : "离线");
+            statusLabel.setFont(new Font("宋体", Font.PLAIN, 12));
+            statusLabel.setForeground(isOnline ? new Color(0, 128, 0) : Color.GRAY);
+            
+            // 如果有未读消息，修改状态标签
+            if (hasUnread) {
+                statusLabel.setText(isOnline ? "在线 - 有新消息" : "离线 - 有新消息");
+                statusLabel.setForeground(new Color(255, 0, 0));
+            }
+            
             infoPanel.add(nameLabel, BorderLayout.CENTER);
             infoPanel.add(statusLabel, BorderLayout.SOUTH);
             
             panel.add(avatarPanel, BorderLayout.WEST);
             panel.add(infoPanel, BorderLayout.CENTER);
+            
+            // 如果有未读消息，添加提示图标
+            if (hasUnread) {
+                JPanel notificationPanel = new JPanel() {
+                    @Override
+                    protected void paintComponent(Graphics g) {
+                        super.paintComponent(g);
+                        g.setColor(new Color(255, 0, 0));
+                        g.fillOval(0, 0, 16, 16);
+                        g.setColor(Color.WHITE);
+                        g.setFont(new Font("宋体", Font.BOLD, 10));
+                        String count = String.valueOf(unreadCount);
+                        FontMetrics fm = g.getFontMetrics();
+                        int x = (getWidth() - fm.stringWidth(count)) / 2;
+                        int y = ((getHeight() - fm.getHeight()) / 2) + fm.getAscent();
+                        g.drawString(count, x, y);
+                    }
+                };
+                notificationPanel.setPreferredSize(new Dimension(16, 16));
+                panel.add(notificationPanel, BorderLayout.EAST);
+            }
             
             return panel;
         }
@@ -660,6 +722,13 @@ public class ContactListView extends JFrame implements ModelObserver {
             }
             
             GroupItem group = (GroupItem) value;
+            
+            // 检查是否有未读消息
+            boolean hasUnread = false;
+            final int unreadCount;
+            java.util.List<Chat_info> unreadMessages = model.getUnreadMessages(true, String.valueOf(group.getId()));
+            unreadCount = unreadMessages.size();
+            hasUnread = unreadCount > 0;
             
             // 创建群组图标面板
             JPanel iconPanel = new JPanel() {
@@ -693,15 +762,48 @@ public class ContactListView extends JFrame implements ModelObserver {
             JLabel nameLabel = new JLabel(group.getName());
             nameLabel.setFont(new Font("宋体", Font.BOLD, 14));
             
+            // 如果有未读消息，修改名称标签
+            if (hasUnread) {
+                nameLabel.setText(group.getName() + " [" + unreadCount + "条新消息]");
+                nameLabel.setForeground(new Color(255, 0, 0)); // 红色显示
+            }
+            
             JLabel memberCountLabel = new JLabel(group.getGroupInfo().getMembers().size() + "人");
             memberCountLabel.setFont(new Font("宋体", Font.PLAIN, 12));
             memberCountLabel.setForeground(Color.GRAY);
+            
+            // 如果有未读消息，修改成员数量标签
+            if (hasUnread) {
+                memberCountLabel.setText(group.getGroupInfo().getMembers().size() + "人 - 有新消息");
+                memberCountLabel.setForeground(new Color(255, 0, 0));
+            }
             
             infoPanel.add(nameLabel, BorderLayout.CENTER);
             infoPanel.add(memberCountLabel, BorderLayout.SOUTH);
             
             panel.add(iconPanel, BorderLayout.WEST);
             panel.add(infoPanel, BorderLayout.CENTER);
+            
+            // 如果有未读消息，添加提示图标
+            if (hasUnread) {
+                JPanel notificationPanel = new JPanel() {
+                    @Override
+                    protected void paintComponent(Graphics g) {
+                        super.paintComponent(g);
+                        g.setColor(new Color(255, 0, 0));
+                        g.fillOval(0, 0, 16, 16);
+                        g.setColor(Color.WHITE);
+                        g.setFont(new Font("宋体", Font.BOLD, 10));
+                        String count = String.valueOf(unreadCount);
+                        FontMetrics fm = g.getFontMetrics();
+                        int x = (getWidth() - fm.stringWidth(count)) / 2;
+                        int y = ((getHeight() - fm.getHeight()) / 2) + fm.getAscent();
+                        g.drawString(count, x, y);
+                    }
+                };
+                notificationPanel.setPreferredSize(new Dimension(16, 16));
+                panel.add(notificationPanel, BorderLayout.EAST);
+            }
             
             return panel;
         }

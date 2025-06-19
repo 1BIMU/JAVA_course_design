@@ -41,6 +41,10 @@ public class ClientModel {
     // 登录状态
     private boolean loggedIn;
     
+    // 未读消息映射表 <聊天对象ID, 未读消息列表>
+    // 聊天对象ID格式：private:username 或 group:groupId
+    private Map<String, List<Chat_info>> unreadMessages;
+    
     // 观察者列表
     private List<ModelObserver> observers;
     
@@ -52,6 +56,7 @@ public class ClientModel {
         this.allUsers = new ArrayList<>();
         this.groups = new HashMap<>();
         this.messageHistory = new ArrayList<>();
+        this.unreadMessages = new HashMap<>();
         this.loggedIn = false;
         // 使用线程安全的列表存储观察者
         this.observers = new CopyOnWriteArrayList<>();
@@ -149,16 +154,35 @@ public class ClientModel {
     }
     
     /*
-        TODO: 添加聊天消息到历史记录（待实现）
+        添加聊天消息到历史记录
     */
     public void addMessage(Chat_info message) {
+        // 添加到历史记录
         messageHistory.add(message);
         lastChatMessage = message;
+        
+        // 如果消息不是当前用户发送的，则添加到未读消息列表
+        if (!message.getFrom_username().equals(currentUser)) {
+            String chatId;
+            if (message.isType()) {
+                // 群聊消息
+                chatId = "group:" + message.getGroup_id();
+            } else {
+                // 私聊消息
+                chatId = "private:" + message.getFrom_username();
+            }
+            
+            // 获取或创建未读消息列表
+            List<Chat_info> unread = unreadMessages.getOrDefault(chatId, new ArrayList<>());
+            unread.add(message);
+            unreadMessages.put(chatId, unread);
+        }
+        
         notifyObservers(UpdateType.CHAT);
     }
     
     /*
-        TODO: 获取聊天消息历史记录（待实现）
+        获取聊天消息历史记录
     */
     public List<Chat_info> getMessageHistory() {
         return new ArrayList<>(messageHistory);
@@ -169,6 +193,44 @@ public class ClientModel {
      */
     public Chat_info getLastChatMessage() {
         return lastChatMessage;
+    }
+    
+    /**
+     * 获取指定聊天对象的未读消息列表
+     * @param isGroupChat 是否为群聊
+     * @param targetId 目标ID（用户名或群组ID）
+     * @return 未读消息列表
+     */
+    public List<Chat_info> getUnreadMessages(boolean isGroupChat, String targetId) {
+        String chatId = (isGroupChat ? "group:" : "private:") + targetId;
+        List<Chat_info> unread = unreadMessages.get(chatId);
+        return unread != null ? new ArrayList<>(unread) : new ArrayList<>();
+    }
+    
+    /**
+     * 将指定聊天对象的消息标记为已读
+     * @param isGroupChat 是否为群聊
+     * @param targetId 目标ID（用户名或群组ID）
+     */
+    public void markMessagesAsRead(boolean isGroupChat, String targetId) {
+        String chatId = (isGroupChat ? "group:" : "private:") + targetId;
+        if (unreadMessages.containsKey(chatId) && !unreadMessages.get(chatId).isEmpty()) {
+            unreadMessages.remove(chatId);
+            // 通知观察者更新界面
+            notifyObservers(isGroupChat ? UpdateType.GROUPS : UpdateType.USERS);
+        }
+    }
+    
+    /**
+     * 检查指定聊天对象是否有未读消息
+     * @param isGroupChat 是否为群聊
+     * @param targetId 目标ID（用户名或群组ID）
+     * @return 是否有未读消息
+     */
+    public boolean hasUnreadMessages(boolean isGroupChat, String targetId) {
+        String chatId = (isGroupChat ? "group:" : "private:") + targetId;
+        List<Chat_info> unread = unreadMessages.get(chatId);
+        return unread != null && !unread.isEmpty();
     }
     
     /*
@@ -216,6 +278,7 @@ public class ClientModel {
         groups.clear();
         messageHistory.clear();
         lastChatMessage = null;
+        unreadMessages.clear();
         loggedIn = false;
         notifyObservers(UpdateType.ALL);
     }

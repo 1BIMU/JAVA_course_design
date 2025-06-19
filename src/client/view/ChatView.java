@@ -9,6 +9,7 @@ import java.awt.event.WindowEvent;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import javax.swing.BorderFactory;
@@ -52,7 +53,7 @@ public class ChatView extends JFrame implements ModelObserver {
     private String targetName; // 显示名称
 
     // 日期格式化
-    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * 构造函数 - 用于单独的聊天窗口
@@ -216,17 +217,20 @@ public class ChatView extends JFrame implements ModelObserver {
         }
         
         // 显示加载提示
-        messageDisplay.setText("正在加载历史消息...\n");
+        messageDisplay.setText("正在加载消息...\n");
+        
+        // 获取未读消息
+        List<Chat_info> unreadMessages = model.getUnreadMessages(isGroupChat, targetId);
         
         controller.loadChatHistory(chatInfo, history -> {
-            if (history != null && !history.isEmpty()) {
-                SwingUtilities.invokeLater(() -> {
-                    messageDisplay.setText("");
-                    messageDisplay.append("===== 历史消息 =====\n");
-                    
-                    // 使用Set去重，避免重复显示相同的消息
-                    Set<String> uniqueMessages = new HashSet<>();
-                    
+            SwingUtilities.invokeLater(() -> {
+                messageDisplay.setText("");
+                
+                // 使用Set去重，避免重复显示相同的消息
+                Set<String> uniqueMessages = new HashSet<>();
+                
+                // 显示历史消息
+                if (history != null && !history.isEmpty()) {
                     for (String line : history) {
                         // 解析保存的消息格式: 时间戳|发送者|消息内容
                         String[] parts = line.split("\\|", 3);
@@ -234,6 +238,18 @@ public class ChatView extends JFrame implements ModelObserver {
                             String timestamp = parts[0];
                             String sender = parts[1];
                             String text = parts[2];
+                            
+                            // 尝试解析并格式化时间戳
+                            try {
+                                // 如果时间戳只包含时分秒，添加当前日期
+                                if (timestamp.matches("\\d{2}:\\d{2}:\\d{2}")) {
+                                    LocalDateTime now = LocalDateTime.now();
+                                    timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + " " + timestamp;
+                                }
+                                // 如果时间戳格式不符合预期，保持原样
+                            } catch (Exception e) {
+                                // 保持原始时间戳
+                            }
                             
                             // 构建格式化的消息
                             String formattedMessage = "[" + timestamp + "] " + sender + ": " + text;
@@ -247,17 +263,34 @@ public class ChatView extends JFrame implements ModelObserver {
                             messageDisplay.append(line + "\n");
                         }
                     }
+                } else {
+                    messageDisplay.append("暂无聊天记录\n");
+                }
+                
+                // 显示未读消息，如果有的话
+                if (!unreadMessages.isEmpty()) {
+                    // 添加分隔线，标记未读消息的开始
+                    messageDisplay.append("\n----- 以下是未读消息 -----\n\n");
                     
-                    messageDisplay.append("===== 最新消息 =====\n\n");
-                    // 滚动到最底部
-                    messageDisplay.setCaretPosition(messageDisplay.getDocument().getLength());
-                });
-            } else {
-        SwingUtilities.invokeLater(() -> {
-                    messageDisplay.setText("");
-                    messageDisplay.append("暂无历史聊天记录\n\n");
-                });
-            }
+                    // 遍历未读消息并显示
+                    for (Chat_info msg : unreadMessages) {
+                        String timestamp = LocalDateTime.now().format(timeFormatter);
+                        String sender = msg.getFrom_username();
+                        String text = msg.getText();
+                        
+                        // 显示未读消息
+                        messageDisplay.append("[" + timestamp + "] " + sender + ": " + text + "\n");
+                    }
+                }
+                
+                // 滚动到最底部
+                messageDisplay.setCaretPosition(messageDisplay.getDocument().getLength());
+                
+                // 将未读消息标记为已读
+                if (!unreadMessages.isEmpty()) {
+                    model.markMessagesAsRead(isGroupChat, targetId);
+                }
+            });
         });
     }
 
@@ -344,6 +377,12 @@ public class ChatView extends JFrame implements ModelObserver {
                     String from = lastChat.getFrom_username();
                     String text = lastChat.getText();
                     displayMessage(from + ": " + text);
+                    
+                    // 如果消息不是由当前用户发送的，则标记为已读
+                    if (!lastChat.getFrom_username().equals(controller.getCurrentUsername())) {
+                        // 将当前聊天的所有未读消息标记为已读
+                        model.markMessagesAsRead(isGroupChat, targetId);
+                    }
                 }
             }
         }
