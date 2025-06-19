@@ -1,13 +1,11 @@
 package info;
 
-import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Map;
 
 //登录消息封装，服务端和客户端
 public class Login_info implements Serializable{//每次登录成功之后或者登出成功之后，都要跟其他的人同步当前用户的列表
-    @Serial
     private static final long serialVersionUID = -4476989302262161367L;
 
     //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的群，包括群ID，群所有成员
@@ -22,6 +20,8 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     private String userName;
     private String password;
     private ArrayList<String> onlineUsers;
+    // 所有注册用户列表
+    private ArrayList<String> allUsers;
     //登录成功标志
     private Boolean loginSuccessFlag = false;
 
@@ -78,5 +78,21 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     }
     public Map<Integer,ArrayList<String>> getOrgMap() {
         return orgMap;
+    }
+    
+    /**
+     * 获取所有注册用户列表
+     * @return 所有注册用户列表
+     */
+    public ArrayList<String> getAllUsers() {
+        return allUsers;
+    }
+    
+    /**
+     * 设置所有注册用户列表
+     * @param allUsers 所有注册用户列表
+     */
+    public void setAllUsers(ArrayList<String> allUsers) {
+        this.allUsers = allUsers;
     }
 }

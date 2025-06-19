@@ -34,6 +34,10 @@ public class ServerController {
         boolean flag = model.checkUserLogin(tfi);
         boolean isOline = model.checkUserOnline(tfi.getUserName(),this.server.online_users);//检查该用户是否已上线，支持漫游
         tfi.setLoginSuccessFlag(false);
+        
+        // 获取所有注册用户列表
+        ArrayList<String> allUsers = FI.getAllUsers();
+        
         if(flag) {
             //返回登录成功给客户端
             ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录成功");
@@ -47,6 +51,7 @@ public class ServerController {
                 tfi.setLoginSuccessFlag(true);
                 tfi.setKicked(true);
                 tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
+                tfi.setAllUsers(allUsers); // 设置所有注册用户列表
                 RETURN.set_login_info(tfi);
                 RETURN.set_type(3);
                 IOStream.writeMessage(old_socket, RETURN);
@@ -64,6 +69,7 @@ public class ServerController {
                 server.add_online_user(tfi.getUserName());
                 ServerFrame.appendLog("更新在线用户列表: " + server.online_users);
                 tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
+                tfi.setAllUsers(allUsers); // 设置所有注册用户列表
                 //更新前端页面
                 ServerFrame.updateUserList(server.online_users);
                 //消息设置和封装
@@ -97,6 +103,7 @@ public class ServerController {
             //返回登录失败给客户端
             // 即使登录失败，也需要设置在线用户列表，避免客户端出现NullPointerException
             tfi.setOnlineUsers(server.online_users);
+            tfi.setAllUsers(allUsers); // 设置所有注册用户列表
             RETURN.set_login_info(tfi);
             RETURN.set_type(3);
 
@@ -205,11 +212,16 @@ public class ServerController {
         //维护相关动态表格
         ServerFrame.appendLog("用户 " + current_user + " 正在注销");
         
+        // 获取所有注册用户列表
+        FileIO FI = new FileIO();
+        ArrayList<String> allUsers = FI.getAllUsers();
+        
         // 先创建登出通知消息，在移除用户前准备好消息
         Login_info logoutInfo = new Login_info();
         logoutInfo.setUserName(current_user);
         logoutInfo.setLoginSuccessFlag(false); // 设置为false表示用户下线
         logoutInfo.setOnlineUsers(new ArrayList<>(server.online_users)); // 复制当前在线用户列表
+        logoutInfo.setAllUsers(allUsers); // 设置所有注册用户列表
         
         // 从在线用户列表中移除当前用户
         this.server.userSocketMap.remove(current_user);

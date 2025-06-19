@@ -30,6 +30,8 @@ public class ClientModel {
     private String currentUser;
     // 在线用户列表
     private ArrayList<String> onlineUsers;
+    // 所有注册用户列表
+    private ArrayList<String> allUsers;
     // 群组信息映射表 <群组ID, 群组信息>
     private Map<Integer, Group_info> groups;   //TODO: 这里的具体逻辑待服务端实现
     // 聊天消息历史记录
@@ -47,6 +49,7 @@ public class ClientModel {
     */
     public ClientModel() {
         this.onlineUsers = new ArrayList<>();
+        this.allUsers = new ArrayList<>();
         this.groups = new HashMap<>();
         this.messageHistory = new ArrayList<>();
         this.loggedIn = false;
@@ -184,11 +187,32 @@ public class ClientModel {
     }
     
     /*
+        更新所有注册用户列表
+    */
+    public void setAllUsers(ArrayList<String> users) {
+        // 添加空值检查，避免NullPointerException
+        if (users != null) {
+            this.allUsers = new ArrayList<>(users);
+        } else {
+            this.allUsers = new ArrayList<>();
+        }
+        notifyObservers(UpdateType.ALL_USERS);
+    }
+    
+    /*
+        获取所有注册用户列表
+    */
+    public ArrayList<String> getAllUsers() {
+        return new ArrayList<>(allUsers);
+    }
+    
+    /*
         登出时，需要清除所有数据
     */
     public void clear() {
         currentUser = null;
         onlineUsers.clear();
+        allUsers.clear();
         groups.clear();
         messageHistory.clear();
         lastChatMessage = null;
@@ -201,7 +225,8 @@ public class ClientModel {
     */
     public enum UpdateType {
         CURRENT_USER,  // 当前用户更新
-        USERS,         // 用户列表更新
+        USERS,         // 在线用户列表更新
+        ALL_USERS,     // 所有注册用户列表更新
         GROUPS,        // 群组信息更新
         CHAT,          // 聊天消息更新
         LOGIN_STATUS,  // 登录状态更新

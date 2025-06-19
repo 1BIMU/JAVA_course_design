@@ -3,7 +3,9 @@ package client.controller;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import client.MessageSender;
 import client.model.ClientModel;
@@ -21,7 +23,8 @@ import io.FileIO;
 */
 public class ChatController {
     private ClientModel model;
-    private ChatView chatView;
+    // 修改为Map，用于管理多个聊天窗口
+    private Map<String, ChatView> chatViews = new HashMap<>();
     private MessageSender messageSender; // 替代原来的Socket
     
     /*
@@ -36,7 +39,32 @@ public class ChatController {
         设置聊天视图
     */
     public void setChatView(ChatView chatView) {
-        this.chatView = chatView;
+        if (chatView == null) {
+            return; // 忽略null值
+        }
+        
+        // 根据聊天类型和目标ID生成唯一键
+        String key = getChatViewKey(chatView.isGroupChat(), chatView.getTargetId());
+        chatViews.put(key, chatView);
+    }
+    
+    /*
+        移除聊天视图
+    */
+    public void removeChatView(ChatView chatView) {
+        if (chatView == null) {
+            return;
+        }
+        
+        String key = getChatViewKey(chatView.isGroupChat(), chatView.getTargetId());
+        chatViews.remove(key);
+    }
+    
+    /*
+        生成聊天窗口的唯一键
+    */
+    private String getChatViewKey(boolean isGroupChat, String targetId) {
+        return (isGroupChat ? "group:" : "private:") + targetId;
     }
     
     /*
@@ -45,7 +73,11 @@ public class ChatController {
     public void sendMessage(String message, boolean isGroupChat, String targetId) {
         // 输入验证
         if (message == null || message.trim().isEmpty()) {
-            chatView.showError("消息不能为空");
+            String key = getChatViewKey(isGroupChat, targetId);
+            ChatView chatView = chatViews.get(key);
+            if (chatView != null) {
+                chatView.showError("消息不能为空");
+            }
             return;
         }
         
@@ -56,31 +88,25 @@ public class ChatController {
                 model.getCurrentUser(), message, isGroupChat, targetId);
             
             if (success) {
-                // 创建聊天信息对象用于本地历史记录
-                Chat_info chatInfo = new Chat_info();
-                chatInfo.setType(isGroupChat);
-                chatInfo.setFrom_username(model.getCurrentUser());
-                chatInfo.setText(message);
-                
-                if (isGroupChat) {
-                    chatInfo.setGroup_id(Integer.parseInt(targetId));
-                } else {
-                    chatInfo.setTo_username(targetId);
-                }
-                
-                // 添加到本地消息历史
-                model.addMessage(chatInfo);
+                // 消息已发送到服务器，等待服务器回复
+                // 不再在本地添加消息到模型，而是等待服务器的响应
                 
                 // 清空输入框
+                String key = getChatViewKey(isGroupChat, targetId);
+                ChatView chatView = chatViews.get(key);
                 if (chatView != null) {
                     chatView.clearMessageInput();
                 }
             } else {
+                String key = getChatViewKey(isGroupChat, targetId);
+                ChatView chatView = chatViews.get(key);
                 if (chatView != null) {
-                    chatView.showError("发送消息失败");
+                    chatView.showError("发送消息失败，请检查网络连接");
                 }
             }
         } catch (NumberFormatException e) {
+            String key = getChatViewKey(isGroupChat, targetId);
+            ChatView chatView = chatViews.get(key);
             if (chatView != null) {
                 chatView.showError("群组ID格式错误");
             }
@@ -93,11 +119,15 @@ public class ChatController {
     public void createGroup(String groupName, List<String> members) {
         // 输入验证
         if (groupName == null || groupName.trim().isEmpty()) {
-            chatView.showError("群组名称不能为空");
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("群组名称不能为空");
+            }
             return;
         }
         if (members == null || members.isEmpty()) {
-            chatView.showError("群组成员不能为空");
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("群组成员不能为空");
+            }
             return;
         }
         
@@ -109,8 +139,10 @@ public class ChatController {
         // 使用MessageSender发送创建群组请求
         boolean success = messageSender.sendCreateGroupRequest(groupName, members);
         
-        if (!success && chatView != null) {
-            chatView.showError("创建群组失败");
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("创建群组失败");
+            }
         }
     }
     
@@ -121,8 +153,10 @@ public class ChatController {
         // 使用MessageSender发送退出群组请求
         boolean success = messageSender.sendLeaveGroupRequest(groupId);
         
-        if (!success && chatView != null) {
-            chatView.showError("退出群组失败");
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("退出群组失败");
+            }
         }
     }
     
@@ -133,7 +167,9 @@ public class ChatController {
         // 获取当前群组信息
         Group_info currentGroup = model.getGroups().get(groupId);
         if (currentGroup == null) {
-            chatView.showError("群组不存在");
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("群组不存在");
+            }
             return;
         }
         
@@ -142,7 +178,9 @@ public class ChatController {
         
         // 检查用户是否已在群组中
         if (newMembers.contains(username)) {
-            chatView.showError("用户已在群组中");
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("用户已在群组中");
+            }
             return;
         }
         
@@ -153,8 +191,10 @@ public class ChatController {
         boolean success = messageSender.sendUpdateGroupRequest(
             groupId, currentGroup.get_Group_name(), newMembers);
         
-        if (!success && chatView != null) {
-            chatView.showError("添加用户到群组失败");
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("添加用户到群组失败");
+            }
         }
     }
     
@@ -165,7 +205,9 @@ public class ChatController {
         // 获取当前群组信息
         Group_info currentGroup = model.getGroups().get(groupId);
         if (currentGroup == null) {
-            chatView.showError("群组不存在");
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("群组不存在");
+            }
             return;
         }
         
@@ -174,7 +216,9 @@ public class ChatController {
         
         // 检查用户是否在群组中
         if (!newMembers.contains(username)) {
-            chatView.showError("用户不在群组中");
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("用户不在群组中");
+            }
             return;
         }
         
@@ -185,8 +229,10 @@ public class ChatController {
         boolean success = messageSender.sendUpdateGroupRequest(
             groupId, currentGroup.get_Group_name(), newMembers);
         
-        if (!success && chatView != null) {
-            chatView.showError("从群组移除用户失败");
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("从群组移除用户失败");
+            }
         }
     }
     
@@ -195,14 +241,38 @@ public class ChatController {
     */
     public void onNewMessage(Chat_info chatInfo) {
         // 检查这条消息是否是由当前用户发送的
-        // 如果是当前用户发送的消息，不再添加到模型中，因为在sendMessage方法中已经添加过了
         boolean isFromCurrentUser = chatInfo.getFrom_username().equals(model.getCurrentUser());
         
+        // 检查消息是否发送失败
+        if (isFromCurrentUser && !chatInfo.getTransfer_status()) {
+            // 消息发送失败，显示提示框
+            String targetUser = chatInfo.getTo_username();
+            // 获取对应的聊天窗口
+            String key = getChatViewKey(false, targetUser);
+            ChatView chatView = chatViews.get(key);
+            
+            if (chatView != null) {
+                chatView.showError("用户 " + targetUser + " 当前不在线，消息发送失败");
+            } else {
+                // 如果没有找到对应的聊天窗口，可以考虑在所有打开的窗口中显示错误
+                for (ChatView view : chatViews.values()) {
+                    view.showError("用户 " + targetUser + " 当前不在线，消息发送失败");
+                    break; // 只在一个窗口显示即可
+                }
+            }
+            // 不将失败的消息添加到模型中
+            return;
+        }
+        
         if (!isFromCurrentUser) {
-            // 只有当消息不是由当前用户发送的时候才添加到模型
-            // 这样可以避免消息被添加两次
+            // 只有当消息不是由当前用户发送的时候才添加到模型并保存到文件
             model.addMessage(chatInfo);
             saveMessageToFile(chatInfo);
+        } else if (chatInfo.getTransfer_status()) {
+            // 如果是当前用户发送的消息且发送成功，只添加到模型，不重复保存到文件
+            // 因为服务器会将消息转发回来，此时会再次触发onNewMessage
+            model.addMessage(chatInfo);
+            System.out.println("消息发送成功，添加到模型");
         } else {
             System.out.println("跳过添加当前用户的消息，避免重复显示");
         }     
@@ -227,7 +297,7 @@ public class ChatController {
         处理群组创建成功事件
     */
     public void onGroupCreated(Group_info groupInfo) {
-        if (chatView != null) {
+        for (ChatView chatView : chatViews.values()) {
             chatView.updateGroupList();
             chatView.showMessage("群组 \"" + groupInfo.get_Group_name() + "\" 创建成功");
         }
@@ -237,7 +307,7 @@ public class ChatController {
         处理群组更新事件
     */
     public void onGroupUpdated(Group_info groupInfo) {
-        if (chatView != null) {
+        for (ChatView chatView : chatViews.values()) {
             chatView.updateGroupList();
             chatView.showMessage("群组 \"" + groupInfo.get_Group_name() + "\" 已更新");
         }
@@ -247,7 +317,7 @@ public class ChatController {
         处理被移出群组事件
     */
     public void onRemovedFromGroup(Group_info groupInfo) {
-        if (chatView != null) {
+        for (ChatView chatView : chatViews.values()) {
             chatView.updateGroupList();
             chatView.showMessage("您已被移出群组 \"" + groupInfo.get_Group_name() + "\"");
         }
@@ -302,8 +372,10 @@ public class ChatController {
         // 使用MessageSender发送登出请求
         boolean success = messageSender.sendLogoutRequest();
         
-        if (!success && chatView != null) {
-            chatView.showError("登出失败");
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("登出失败");
+            }
         }
         
         // 清除模型数据

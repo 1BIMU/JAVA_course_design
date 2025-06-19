@@ -54,6 +54,15 @@ public class LoginMessageHandler implements ClientMessageHandler {
             model.setOnlineUsers(new ArrayList<>());
         }
         
+        // 更新所有注册用户列表
+        ArrayList<String> allUsers = loginInfo.getAllUsers();
+        if (allUsers != null) {
+            model.setAllUsers(allUsers);
+        } else {
+            // 如果所有用户列表为null，则使用空列表
+            model.setAllUsers(new ArrayList<>());
+        }
+        
         // 如果当前客户端还没有登录用户，这可能是我们的登录响应
         if (model.getCurrentUser() == null || !model.isLoggedIn()) {
             // 只有登录成功才设置当前用户

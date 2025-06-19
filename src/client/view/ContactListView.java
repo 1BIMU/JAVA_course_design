@@ -503,9 +503,11 @@ public class ContactListView extends JFrame implements ModelObserver {
     public void updateUserList() {
         SwingUtilities.invokeLater(() -> {
             userListModel.clear();
-            ArrayList<String> users = model.getOnlineUsers();
-            if (users != null) {
-                for (String user : users) {
+            ArrayList<String> allUsers = model.getAllUsers();
+            ArrayList<String> onlineUsers = model.getOnlineUsers();
+            
+            if (allUsers != null) {
+                for (String user : allUsers) {
                     userListModel.addElement(user);
                 }
             }
@@ -555,6 +557,7 @@ public class ContactListView extends JFrame implements ModelObserver {
     public void onModelUpdate(UpdateType updateType) {
         switch (updateType) {
             case USERS:
+            case ALL_USERS:
                 updateUserList();
                 break;
             case GROUPS:
@@ -585,6 +588,7 @@ public class ContactListView extends JFrame implements ModelObserver {
             }
             
             String username = (String) value;
+            boolean isOnline = model.getOnlineUsers().contains(username);
             
             // 创建头像面板
             JPanel avatarPanel = new JPanel() {
@@ -617,9 +621,9 @@ public class ContactListView extends JFrame implements ModelObserver {
             JLabel nameLabel = new JLabel(username);
             nameLabel.setFont(new Font("宋体", Font.BOLD, 14));
             
-            JLabel statusLabel = new JLabel("在线");
+            JLabel statusLabel = new JLabel(isOnline ? "在线" : "离线");
             statusLabel.setFont(new Font("宋体", Font.PLAIN, 12));
-            statusLabel.setForeground(new Color(0, 128, 0));
+            statusLabel.setForeground(isOnline ? new Color(0, 128, 0) : Color.GRAY);
             
             // 如果是当前用户，特殊标记
             if (username.equals(currentUsername)) {

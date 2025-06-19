@@ -88,11 +88,16 @@ public class ChatView extends JFrame implements ModelObserver {
         // 注册为模型观察者
         model.addObserver(this);
 
+        // 将此视图设置到控制器中
+        controller.setChatView(this);
+
         // 添加窗口关闭事件处理
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 model.removeObserver(ChatView.this);
+                // 从控制器中移除此视图
+                controller.removeChatView(ChatView.this);
             }
         });
 
@@ -188,9 +193,6 @@ public class ChatView extends JFrame implements ModelObserver {
         
         // 只清空输入框，不显示消息
         clearMessageInput();
-        
-        // 显示发送状态
-        updateStatus("消息已发送...");
     }
 
     /**
@@ -350,4 +352,20 @@ public class ChatView extends JFrame implements ModelObserver {
     // 为了兼容旧代码添加的方法
     public void updateUserList() {}
     public void updateGroupList() {}
+
+    /**
+     * 返回聊天是否为群聊
+     * @return 是否为群聊
+     */
+    public boolean isGroupChat() {
+        return isGroupChat;
+    }
+    
+    /**
+     * 获取目标ID（用户名或群组ID）
+     * @return 目标ID
+     */
+    public String getTargetId() {
+        return targetId;
+    }
 }

@@ -349,5 +349,27 @@ public class FileIO {
 
         return Files.readAllLines(chatFile);
     }
+
+    /**
+     * 获取所有注册用户的列表
+     * @return 所有注册用户的列表
+     * @throws IOException 如果读取文件时出错
+     */
+    public ArrayList<String> getAllUsers() throws IOException {
+        ArrayList<String> users = new ArrayList<>();
+        
+        if (!Files.exists(userFilePath)) {
+            return users;
+        }
+        
+        Files.lines(userFilePath).forEach(line -> {
+            String[] parts = line.split("\\|");
+            if (parts.length > 0 && !parts[0].trim().isEmpty()) {
+                users.add(parts[0]);
+            }
+        });
+        
+        return users;
+    }
 }
 
