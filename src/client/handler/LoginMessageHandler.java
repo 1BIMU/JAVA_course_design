@@ -2,11 +2,13 @@ package client.handler;
 
 import client.controller.LoginController;
 import client.model.ClientModel;
+import info.Group_info;
 import info.Login_info;
 import info.encap_info;
 
 import javax.swing.*;
 import java.util.ArrayList;
+import java.util.Map;
 
 /**
  * 客户端登录消息处理器
@@ -49,26 +51,26 @@ public class LoginMessageHandler implements ClientMessageHandler {
         ArrayList<String> onlineUsers = loginInfo.getOnlineUsers();
         if (onlineUsers != null) {
             model.setOnlineUsers(onlineUsers);
-        } else {
-            // 如果在线用户列表为null，则使用空列表
-            model.setOnlineUsers(new ArrayList<>());
         }
         
-        // 更新所有注册用户列表
+        // 更新所有注册用户列表 - 如果有的话
         ArrayList<String> allUsers = loginInfo.getAllUsers();
         if (allUsers != null) {
             model.setAllUsers(allUsers);
-        } else {
-            // 如果所有用户列表为null，则使用空列表
-            model.setAllUsers(new ArrayList<>());
         }
         
-        // 如果当前客户端还没有登录用户，这可能是我们的登录响应
-        if (model.getCurrentUser() == null || !model.isLoggedIn()) {
-            // 只有登录成功才设置当前用户
+        // 检查是初次登录消息还是更新消息
+        if (model.getCurrentUser() == null || !model.getCurrentUser().equals(loginInfo.getUserName())) {
+            // 初次登录消息处理
             if (loginInfo.getLoginSuccessFlag()) {
+                // 设置当前用户
                 model.setCurrentUser(loginInfo.getUserName());
                 model.setLoggedIn(true);
+                
+                // 处理群组信息 - 处理服务器发送的群组列表
+                processGroupInfo(loginInfo);
+                
+                // 通知登录控制器登录成功
                 loginController.onLoginSuccess();
             } else {
                 // 登录失败，不设置当前用户，只通知登录失败
@@ -78,10 +80,55 @@ public class LoginMessageHandler implements ClientMessageHandler {
             // 这是对当前用户的确认消息，只需确认登录状态
             if (loginInfo.getLoginSuccessFlag()) {
                 model.setLoggedIn(true);
+                
+                // 处理群组信息 - 也需要处理服务器可能发送的群组列表更新
+                processGroupInfo(loginInfo);
             }
         } else {
             // 这是其他用户的登录通知，只更新在线用户列表，不改变当前用户
             // 已经在上面更新了在线用户列表，这里无需额外操作
+        }
+    }
+    
+    /**
+     * 处理服务器发送的群组信息
+     * @param loginInfo 登录信息对象
+     */
+    private void processGroupInfo(Login_info loginInfo) {
+        // 获取群组ID列表
+        ArrayList<Integer> groupIDList = loginInfo.getGroupIDList();
+        Map<Integer, ArrayList<String>> groupMap = loginInfo.getGroupMap();
+        
+        if (groupIDList != null && groupMap != null) {
+            System.out.println("收到群组信息：" + groupIDList.size() + " 个群组");
+            
+            // 清除现有群组信息，准备更新
+            model.clearGroups();
+            
+            // 处理每个群组信息
+            for (Integer groupId : groupIDList) {
+                ArrayList<String> members = groupMap.get(groupId);
+                if (members != null) {
+                    // 创建群组信息对象
+                    Group_info groupInfo = new Group_info();
+                    groupInfo.set_Group_id(groupId);
+                    // 尝试从成员列表第一个元素设置群组名称，如果没有就用默认名称
+                    String groupName = "群聊 " + groupId;
+                    if (!members.isEmpty()) {
+                        groupName = "用户 " + members.get(0) + " 的群组";
+                    }
+                    groupInfo.set_Group_name(groupName);
+                    groupInfo.setMembers(members);
+                    groupInfo.setEstablish(false); // 非新建群组
+                    groupInfo.setExist(true); // 群组存在
+                    
+                    // 更新到模型中
+                    model.updateGroup(groupInfo);
+                    System.out.println("添加群组: ID=" + groupId + ", 名称=" + groupName + ", 成员=" + members.size());
+                }
+            }
+        } else {
+            System.out.println("没有收到群组信息或群组信息为空");
         }
     }
 } 

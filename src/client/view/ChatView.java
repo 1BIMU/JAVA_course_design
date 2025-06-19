@@ -263,8 +263,6 @@ public class ChatView extends JFrame implements ModelObserver {
                             messageDisplay.append(line + "\n");
                         }
                     }
-                } else {
-                    messageDisplay.append("暂无聊天记录\n");
                 }
                 
                 // 显示未读消息，如果有的话

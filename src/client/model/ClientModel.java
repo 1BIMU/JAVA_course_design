@@ -275,12 +275,20 @@ public class ClientModel {
         currentUser = null;
         onlineUsers.clear();
         allUsers.clear();
-        groups.clear();
+        clearGroups();
         messageHistory.clear();
         lastChatMessage = null;
-        unreadMessages.clear();
         loggedIn = false;
+        unreadMessages.clear();
         notifyObservers(UpdateType.ALL);
+    }
+    
+    /**
+     * 清除所有群组信息
+     */
+    public void clearGroups() {
+        groups.clear();
+        notifyObservers(UpdateType.GROUPS);
     }
     
     /*
