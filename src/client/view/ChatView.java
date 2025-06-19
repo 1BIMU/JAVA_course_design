@@ -51,6 +51,9 @@ public class ChatView extends JFrame implements ModelObserver {
     private boolean isGroupChat;
     private String targetId;  // 用户名或群组ID
     private String targetName; // 显示名称
+    private boolean isOrgChat = false; // 是否为小组聊天
+    private int orgId = -1;   // 小组ID，-1表示非小组聊天
+    private int parentGroupId = -1; // 小组所属的群组ID
 
     // 日期格式化
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -72,6 +75,60 @@ public class ChatView extends JFrame implements ModelObserver {
 
         // 设置窗口属性
         setTitle(isGroupChat ? "群聊: " + targetName : "与 " + targetName + " 聊天");
+        setSize(600, 500);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setLocationRelativeTo(null);
+
+        try {
+            // 设置界面风格
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // 初始化界面
+        initComponents();
+
+        // 注册为模型观察者
+        model.addObserver(this);
+
+        // 将此视图设置到控制器中
+        controller.setChatView(this);
+
+        // 添加窗口关闭事件处理
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                model.removeObserver(ChatView.this);
+                // 从控制器中移除此视图
+                controller.removeChatView(ChatView.this);
+            }
+        });
+
+        // 加载历史聊天记录
+        loadChatHistory();
+    }
+    
+    /**
+     * 构造函数 - 用于小组聊天窗口
+     * @param controller 聊天控制器
+     * @param model 客户端模型
+     * @param parentGroupId 所属群组ID
+     * @param orgId 小组ID
+     * @param targetName 目标名称（用于显示）
+     */
+    public ChatView(ChatController controller, ClientModel model, int parentGroupId, int orgId, String targetName) {
+        this.controller = controller;
+        this.model = model;
+        this.isGroupChat = true; // 小组聊天也是群聊类型
+        this.targetId = String.valueOf(orgId); // 目标ID设为小组ID
+        this.targetName = targetName;
+        this.isOrgChat = true;
+        this.orgId = orgId;
+        this.parentGroupId = parentGroupId;
+
+        // 设置窗口属性，标题显示这是小组聊天
+        setTitle("小组聊天: " + targetName + " (群组ID: " + parentGroupId + ")");
         setSize(600, 500);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -137,7 +194,15 @@ public class ChatView extends JFrame implements ModelObserver {
 
         // 创建聊天标题
         JPanel titlePanel = new JPanel(new BorderLayout());
-        JLabel chatTitle = new JLabel(isGroupChat ? "群聊: " + targetName : "与 " + targetName + " 聊天");
+        String titleText;
+        if (isOrgChat) {
+            titleText = "小组聊天: " + targetName;
+        } else if (isGroupChat) {
+            titleText = "群聊: " + targetName;
+        } else {
+            titleText = "与 " + targetName + " 聊天";
+        }
+        JLabel chatTitle = new JLabel(titleText);
         chatTitle.setFont(new Font("宋体", Font.BOLD, 16));
         chatTitle.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         
@@ -185,10 +250,15 @@ public class ChatView extends JFrame implements ModelObserver {
             return;
         }
 
-        // 发送消息到服务器，不在本地显示，等待服务器回传
-        if (isGroupChat) {
+        // 根据聊天类型发送消息
+        if (isOrgChat) {
+            // 发送小组消息
+            controller.sendOrgMessage(parentGroupId, orgId, message);
+        } else if (isGroupChat) {
+            // 发送普通群聊消息
             controller.sendGroupMessage(targetId, message);
         } else {
+            // 发送私聊消息
             controller.sendPrivateMessage(targetId, message);
         }
         
@@ -207,6 +277,12 @@ public class ChatView extends JFrame implements ModelObserver {
             try {
                 int groupId = Integer.parseInt(targetId);
                 chatInfo.setGroup_id(groupId);
+                
+                // 如果是小组聊天，设置小组相关信息
+                if (isOrgChat) {
+                    chatInfo.setOrgMessage(true);
+                    chatInfo.setOrg_id(orgId);
+                }
             } catch (NumberFormatException e) {
                 showError("群组ID格式错误");
                 return;
@@ -404,5 +480,26 @@ public class ChatView extends JFrame implements ModelObserver {
      */
     public String getTargetId() {
         return targetId;
+    }
+
+    /**
+     * 获取是否为小组聊天
+     */
+    public boolean isOrgChat() {
+        return isOrgChat;
+    }
+    
+    /**
+     * 获取小组ID
+     */
+    public int getOrgId() {
+        return orgId;
+    }
+    
+    /**
+     * 获取所属群组ID
+     */
+    public int getParentGroupId() {
+        return parentGroupId;
     }
 }

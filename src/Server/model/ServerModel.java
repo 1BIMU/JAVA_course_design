@@ -54,7 +54,12 @@ public class ServerModel {
         for(int i = 0;i<to_user.size();i++) {
             //先从hashmap中拿到对应用户的socket
             Socket tempSocket = server.userSocketMap.get(to_user.get(i));
-            IOStream.writeMessage(tempSocket , INFO);
+            // 检查 socket 是否为 null，避免空指针异常
+            if (tempSocket != null) {
+                IOStream.writeMessage(tempSocket, INFO);
+            } else {
+                System.out.println("警告: 用户 " + to_user.get(i) + " 的 Socket 为 null，无法发送消息");
+            }
         }
     }
     /*

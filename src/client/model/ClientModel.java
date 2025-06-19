@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import info.Chat_info;
 import info.Group_info;
+import info.Org_info;
 
 /*
     客户端数据模型，管理客户端的状态和数据
@@ -33,9 +34,11 @@ public class ClientModel {
     // 所有注册用户列表
     private ArrayList<String> allUsers;
     // 群组信息映射表 <群组ID, 群组信息>
-    private Map<Integer, Group_info> groups;   //TODO: 这里的具体逻辑待服务端实现
+    private Map<Integer, Group_info> groups;
+    // 小组信息映射表 <小组ID, 小组信息>
+    private Map<Integer, Org_info> orgs;
     // 聊天消息历史记录
-    private List<Chat_info> messageHistory;   //TODO:这里的具体逻辑待服务端实现
+    private List<Chat_info> messageHistory;
     // 最新的聊天消息
     private Chat_info lastChatMessage;
     // 登录状态
@@ -55,6 +58,7 @@ public class ClientModel {
         this.onlineUsers = new ArrayList<>();
         this.allUsers = new ArrayList<>();
         this.groups = new HashMap<>();
+        this.orgs = new HashMap<>();
         this.messageHistory = new ArrayList<>();
         this.unreadMessages = new HashMap<>();
         this.loggedIn = false;
@@ -151,6 +155,48 @@ public class ClientModel {
     */
     public Map<Integer, Group_info> getGroups() {
         return new HashMap<>(groups);
+    }
+    
+    /**
+     * 清空群组信息
+     */
+    public void clearGroups() {
+        groups.clear();
+        notifyObservers(UpdateType.GROUPS);
+    }
+    
+    /**
+     * 更新小组信息
+     * @param orgInfo 小组信息
+     */
+    public void updateOrg(Org_info orgInfo) {
+        orgs.put(orgInfo.getOrg_id(), orgInfo);
+        notifyObservers(UpdateType.ORGS);
+    }
+    
+    /**
+     * 移除小组
+     * @param orgId 小组ID
+     */
+    public void removeOrg(int orgId) {
+        orgs.remove(orgId);
+        notifyObservers(UpdateType.ORGS);
+    }
+    
+    /**
+     * 获取所有小组信息
+     * @return 小组信息映射表的副本
+     */
+    public Map<Integer, Org_info> getOrgs() {
+        return new HashMap<>(orgs);
+    }
+    
+    /**
+     * 清空小组信息
+     */
+    public void clearOrgs() {
+        orgs.clear();
+        notifyObservers(UpdateType.ORGS);
     }
     
     /*
@@ -269,26 +315,19 @@ public class ClientModel {
     }
     
     /*
-        登出时，需要清除所有数据
+        清空所有数据（用于登出）
     */
     public void clear() {
         currentUser = null;
         onlineUsers.clear();
         allUsers.clear();
-        clearGroups();
+        groups.clear();
+        orgs.clear();
         messageHistory.clear();
+        unreadMessages.clear();
         lastChatMessage = null;
         loggedIn = false;
-        unreadMessages.clear();
         notifyObservers(UpdateType.ALL);
-    }
-    
-    /**
-     * 清除所有群组信息
-     */
-    public void clearGroups() {
-        groups.clear();
-        notifyObservers(UpdateType.GROUPS);
     }
     
     /*
@@ -299,9 +338,10 @@ public class ClientModel {
         USERS,         // 在线用户列表更新
         ALL_USERS,     // 所有注册用户列表更新
         GROUPS,        // 群组信息更新
+        ORGS,          // 小组信息更新
         CHAT,          // 聊天消息更新
         LOGIN_STATUS,  // 登录状态更新
-        ALL           // 全部更新
+        ALL            // 全部更新
     }
     
     /*

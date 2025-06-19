@@ -1,9 +1,7 @@
 package info;
-import java.io.Serial;
 import java.io.Serializable;
 //聊天消息封装
 public class Chat_info implements Serializable {
-    @Serial
     private static final long serialVersionUID = -5761256693412260126L;
     private String text;//字符串消息主体
     private byte[] image;//二进制图片数据
@@ -11,9 +9,11 @@ public class Chat_info implements Serializable {
 
     private int message_type = 0;//消息类型 0为字符串型消息，1为图片类型消息
     private boolean type;//标记是私聊消息还是群聊消息，如果为0，那么是私聊消息，如果为1，那么是群聊消息
+    private boolean isOrgMessage = false; // 是否为小组消息
     private String from_username;//当前用户
     private String to_username;//给到那些用户，需要包含from_username
     private int group_id;//当前群聊的ID
+    private int org_id = -1; // 小组ID，-1表示不属于任何小组
     private boolean transfer_status;
     
     public Chat_info() {
@@ -76,8 +76,41 @@ public class Chat_info implements Serializable {
     public byte[] getImageData() {
         return image;
     }
+    
     public String getImageName() {
         return imageName;
+    }
+    
+    /**
+     * 获取消息是否为小组消息
+     * @return 是否为小组消息
+     */
+    public boolean isOrgMessage() {
+        return isOrgMessage;
+    }
+    
+    /**
+     * 设置消息是否为小组消息
+     * @param isOrgMessage 是否为小组消息
+     */
+    public void setOrgMessage(boolean isOrgMessage) {
+        this.isOrgMessage = isOrgMessage;
+    }
+    
+    /**
+     * 获取小组ID
+     * @return 小组ID，-1表示不属于任何小组
+     */
+    public int getOrg_id() {
+        return org_id;
+    }
+    
+    /**
+     * 设置小组ID
+     * @param org_id 小组ID
+     */
+    public void setOrg_id(int org_id) {
+        this.org_id = org_id;
     }
 
 }

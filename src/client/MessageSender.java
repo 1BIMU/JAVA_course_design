@@ -233,4 +233,105 @@ public class MessageSender {
             System.err.println("获取Socket地址和端口失败: " + e.getMessage());
         }
     }
+    
+    /**
+     * 发送创建小组请求
+     * @param groupId 所属群组ID
+     * @param orgName 小组名称
+     * @param members 小组成员列表
+     * @return 是否发送成功
+     */
+    public boolean sendCreateOrgRequest(int groupId, String orgName, List<String> members) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        Org_info orgInfo = new Org_info();
+        orgInfo.setOrg_name(orgName);
+        orgInfo.setGroup_id(groupId);
+        orgInfo.setMembers(new ArrayList<>(members));
+        orgInfo.setEstablish(true);
+        orgInfo.setExist(true);
+        
+        encap_info info = new encap_info();
+        info.set_type(6); // 组消息类型
+        info.set_org_info(orgInfo);
+        
+        return IOStream.writeMessage(socket, info);
+    }
+    
+    /**
+     * 发送更新小组请求
+     * @param orgId 小组ID
+     * @param orgName 小组名称
+     * @param members 小组成员列表
+     * @return 是否发送成功
+     */
+    public boolean sendUpdateOrgRequest(int orgId, String orgName, ArrayList<String> members) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        Org_info orgInfo = new Org_info();
+        orgInfo.setOrg_id(orgId);
+        orgInfo.setOrg_name(orgName);
+        orgInfo.setMembers(new ArrayList<>(members));
+        orgInfo.setEstablish(false);
+        orgInfo.setExist(true);
+        
+        encap_info info = new encap_info();
+        info.set_type(6); // 组消息类型
+        info.set_org_info(orgInfo);
+        
+        return IOStream.writeMessage(socket, info);
+    }
+    
+    /**
+     * 发送退出小组请求
+     * @param orgId 小组ID
+     * @return 是否发送成功
+     */
+    public boolean sendLeaveOrgRequest(int orgId) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        Org_info orgInfo = new Org_info();
+        orgInfo.setOrg_id(orgId);
+        orgInfo.setExist(false);
+        
+        encap_info info = new encap_info();
+        info.set_type(6); // 组消息类型
+        info.set_org_info(orgInfo);
+        
+        return IOStream.writeMessage(socket, info);
+    }
+    
+    /**
+     * 发送小组聊天消息
+     * @param username 用户名
+     * @param message 消息内容
+     * @param groupId 群组ID
+     * @param orgId 小组ID
+     * @return 是否发送成功
+     */
+    public boolean sendOrgChatMessage(String username, String message, int groupId, int orgId) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        Chat_info chatInfo = new Chat_info();
+        chatInfo.setFrom_username(username);
+        chatInfo.setText(message);
+        chatInfo.setType(true); // 设置为群聊类型
+        chatInfo.setGroup_id(groupId);
+        chatInfo.setOrgMessage(true);
+        chatInfo.setOrg_id(orgId);
+        
+        encap_info info = new encap_info();
+        info.set_type(4); // 聊天消息类型
+        info.set_chat_info(chatInfo);
+        
+        return IOStream.writeMessage(socket, info);
+    }
 }

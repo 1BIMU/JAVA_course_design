@@ -18,10 +18,13 @@ public class FileIO {
     // 默认文件路径
     private static final String DEFAULT_USERS_FILE = "users.dat";
     private static final String DEFAULT_GROUPS_FILE = "groups.dat";
+    private static final String DEFAULT_ORGS_FILE = "orgs.dat";
 
     // 文件路径配置
     private final Path userFilePath;
     private final Path groupFilePath;
+    private final Path orgFilePath; // 小组文件路径
+    
     // 聊天记录文件默认配置
     private static final String GROUP_CHAT_DIR = "chat_group_history";
     private static final String SINGLE_CHAT_DIR = "chat_single_history";
@@ -34,10 +37,36 @@ public class FileIO {
     public FileIO(String userFile, String groupFile) {
         this.userFilePath = Paths.get(userFile);
         this.groupFilePath = Paths.get(groupFile);
+        this.orgFilePath = null; // 不使用小组文件
 
         // 确保文件存在
         try {
             ensureFilesExist();
+            Files.createDirectories(Paths.get(GROUP_CHAT_DIR));
+            Files.createDirectories(Paths.get(SINGLE_CHAT_DIR));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * 使用用户文件和小组文件初始化
+     * @param userFile 用户文件路径
+     * @param orgFile 小组文件路径
+     */
+    public FileIO(String userFile, String orgFile, boolean isOrgFile) {
+        this.userFilePath = Paths.get(userFile);
+        this.groupFilePath = null; // 不使用群组文件
+        this.orgFilePath = Paths.get(orgFile);
+
+        // 确保文件存在
+        try {
+            if (!Files.exists(userFilePath)) {
+                Files.createFile(userFilePath);
+            }
+            if (!Files.exists(orgFilePath)) {
+                Files.createFile(orgFilePath);
+            }
             Files.createDirectories(Paths.get(GROUP_CHAT_DIR));
             Files.createDirectories(Paths.get(SINGLE_CHAT_DIR));
         } catch (IOException e) {
@@ -462,5 +491,176 @@ public class FileIO {
         
         return users;
     }
+
+    // region 小组相关操作
+    /**
+     * 写入小组信息
+     * @param orgId 小组ID
+     * @param orgName 小组名称
+     * @param members 小组成员
+     * @throws IOException 如果发生I/O错误
+     */
+    public void writeOrg(int orgId, String orgName, ArrayList<String> members) throws IOException {
+        if (orgFilePath == null) {
+            throw new IOException("未配置小组文件路径");
+        }
+        
+        // 移除旧记录（如果存在）
+        List<String> orgs = Files.exists(orgFilePath) ?
+                Files.readAllLines(orgFilePath) :
+                new ArrayList<>();
+
+        orgs.removeIf(line -> {
+            String[] parts = line.split("\\|");
+            return parts.length > 0 && parts[0].equals(String.valueOf(orgId));
+        });
+
+        // 添加新记录，包含小组名称
+        String record = orgId + "|" + orgName + "|" + String.join(",", members);
+        orgs.add(record);
+
+        Files.write(orgFilePath, orgs,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+    }
+    
+    /**
+     * 检查小组是否存在
+     * @param orgId 小组ID
+     * @return 如果小组存在则返回true
+     * @throws IOException 如果发生I/O错误
+     */
+    public boolean orgExists(int orgId) throws IOException {
+        if (orgFilePath == null || !Files.exists(orgFilePath)) {
+            return false;
+        }
+
+        return Files.lines(orgFilePath)
+                .anyMatch(line -> {
+                    String[] parts = line.split("\\|");
+                    return parts.length > 0 && parts[0].equals(String.valueOf(orgId));
+                });
+    }
+    
+    /**
+     * 获取用户所属的小组ID列表
+     * @param username 用户名
+     * @return 用户所属的小组ID列表
+     * @throws IOException 如果发生I/O错误
+     */
+    public ArrayList<Integer> getOrgsByUser(String username) throws IOException {
+        ArrayList<Integer> orgIds = new ArrayList<>();
+
+        if (orgFilePath == null || !Files.exists(orgFilePath)) {
+            return orgIds;
+        }
+
+        Files.lines(orgFilePath).forEach(line -> {
+            String[] parts = line.split("\\|");
+            if (parts.length >= 3) {  // 格式是 orgId|orgName|members
+                try {
+                    int orgId = Integer.parseInt(parts[0]);
+                    // 第三部分是成员列表
+                    String[] membersArray = parts[2].split(",");
+                    List<String> members = Arrays.asList(membersArray);
+                    if (members.contains(username)) {
+                        orgIds.add(orgId);
+                    }
+                } catch (NumberFormatException e) {
+                    // 忽略格式错误的小组ID
+                }
+            }
+        });
+
+        return orgIds;
+    }
+    
+    /**
+     * 获取小组成员
+     * @param orgId 小组ID
+     * @return 小组成员列表
+     * @throws IOException 如果发生I/O错误
+     */
+    public ArrayList<String> getOrgMembers(int orgId) throws IOException {
+        if (orgFilePath == null || !Files.exists(orgFilePath)) {
+            return null;
+        }
+
+        return Files.lines(orgFilePath)
+                .filter(line -> line.startsWith(orgId + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    if (parts.length < 3 || parts[2].isEmpty()) {
+                        return new ArrayList<String>();
+                    }
+                    return new ArrayList<>(Arrays.asList(parts[2].split(",")));
+                })
+                .orElse(null);
+    }
+    
+    /**
+     * 获取小组名称
+     * @param orgId 小组ID
+     * @return 小组名称，如果不存在则返回默认名称
+     * @throws IOException 如果发生I/O错误
+     */
+    public String getOrgName(int orgId) throws IOException {
+        if (orgFilePath == null || !Files.exists(orgFilePath)) {
+            return "小组 " + orgId;
+        }
+
+        return Files.lines(orgFilePath)
+                .filter(line -> line.startsWith(orgId + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    if (parts.length < 2 || parts[1].isEmpty()) {
+                        return "小组 " + orgId;
+                    }
+                    return parts[1];
+                })
+                .orElse("小组 " + orgId);
+    }
+    
+    /**
+     * 管理小组成员
+     * @param orgId 小组ID
+     * @param addUsers 要添加的用户
+     * @param removeUsers 要移除的用户
+     * @throws IOException 如果发生I/O错误
+     */
+    public void manageOrgMembers(int orgId, ArrayList<String> addUsers, ArrayList<String> removeUsers) throws IOException {
+        if (orgFilePath == null) {
+            throw new IOException("未配置小组文件路径");
+        }
+        
+        // 获取当前小组成员
+        ArrayList<String> currentMembers = getOrgMembers(orgId);
+        if (currentMembers == null) {
+            throw new IOException("小组不存在: " + orgId);
+        }
+        
+        // 执行添加操作
+        if (addUsers != null && !addUsers.isEmpty()) {
+            for (String user : addUsers) {
+                if (!currentMembers.contains(user)) {
+                    currentMembers.add(user);
+                }
+            }
+        }
+        
+        // 执行移除操作
+        if (removeUsers != null && !removeUsers.isEmpty()) {
+            currentMembers.removeAll(removeUsers);
+        }
+        
+        // 获取小组名称
+        String orgName = getOrgName(orgId);
+        
+        // 更新小组
+        writeOrg(orgId, orgName, currentMembers);
+    }
+    // endregion
 }
 

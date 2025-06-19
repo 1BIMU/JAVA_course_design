@@ -13,6 +13,7 @@ import client.model.ClientModel.ModelObserver;
 import client.model.ClientModel.UpdateType;
 import info.Chat_info;
 import info.Group_info;
+import info.Org_info;
 
 /**
  * 联系人列表视图 - 类似QQ的主界面
@@ -31,12 +32,15 @@ public class ContactListView extends JFrame implements ModelObserver {
     private DefaultListModel<String> userListModel;
     private JList<GroupItem> groupList;
     private DefaultListModel<GroupItem> groupListModel;
+    private JList<OrgItem> orgList;
+    private DefaultListModel<OrgItem> orgListModel;
     private JLabel statusLabel;
     private JLabel currentUserLabel;
     
     // 打开的聊天窗口映射
     private Map<String, ChatView> privateChatWindows = new HashMap<>();
     private Map<Integer, ChatView> groupChatWindows = new HashMap<>();
+    private Map<Integer, ChatView> orgChatWindows = new HashMap<>();
     
     // 当前用户名
     private String currentUsername;
@@ -99,6 +103,10 @@ public class ContactListView extends JFrame implements ModelObserver {
         // 创建群组面板
         JPanel groupPanel = createGroupListPanel();
         tabbedPane.addTab("群聊", new ImageIcon(), groupPanel);
+
+        // 创建小组面板
+        JPanel orgPanel = createOrgListPanel();
+        tabbedPane.addTab("小组", new ImageIcon(), orgPanel);
 
         // 创建底部工具栏
         JPanel bottomPanel = createBottomPanel();
@@ -267,6 +275,73 @@ public class ContactListView extends JFrame implements ModelObserver {
         JButton createGroupButton = new JButton("创建群组");
         createGroupButton.addActionListener(e -> showCreateGroupDialog());
         buttonPanel.add(createGroupButton);
+        
+        panel.add(buttonPanel, BorderLayout.NORTH);
+        panel.add(scrollPane, BorderLayout.CENTER);
+        
+        return panel;
+    }
+
+    /**
+     * 创建小组列表面板
+     */
+    private JPanel createOrgListPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        
+        // 创建小组列表
+        orgListModel = new DefaultListModel<>();
+        orgList = new JList<>(orgListModel);
+        orgList.setCellRenderer(new OrgListCellRenderer());
+        orgList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        
+        // 添加双击事件
+        orgList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    OrgItem selectedOrg = orgList.getSelectedValue();
+                    if (selectedOrg != null) {
+                        openOrgChat(selectedOrg);
+                    }
+                }
+            }
+        });
+        
+        // 添加右键菜单
+        orgList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showPopupMenu(e);
+                }
+            }
+            
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showPopupMenu(e);
+                }
+            }
+            
+            private void showPopupMenu(MouseEvent e) {
+                int index = orgList.locationToIndex(e.getPoint());
+                if (index != -1) {
+                    orgList.setSelectedIndex(index);
+                    OrgItem selectedOrg = orgList.getSelectedValue();
+                    if (selectedOrg != null) {
+                        showOrgContextMenu(selectedOrg, e.getX(), e.getY());
+                    }
+                }
+            }
+        });
+        
+        JScrollPane scrollPane = new JScrollPane(orgList);
+        
+        // 创建操作按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton createOrgButton = new JButton("创建小组");
+        createOrgButton.addActionListener(e -> showCreateOrgDialog());
+        buttonPanel.add(createOrgButton);
         
         panel.add(buttonPanel, BorderLayout.NORTH);
         panel.add(scrollPane, BorderLayout.CENTER);
@@ -508,6 +583,11 @@ public class ContactListView extends JFrame implements ModelObserver {
             chatView.dispose();
         }
         groupChatWindows.clear();
+        
+        for (ChatView chatView : orgChatWindows.values()) {
+            chatView.dispose();
+        }
+        orgChatWindows.clear();
     }
 
     /**
@@ -564,26 +644,291 @@ public class ContactListView extends JFrame implements ModelObserver {
     }
 
     /**
+     * 显示创建小组对话框
+     */
+    private void showCreateOrgDialog() {
+        // 获取当前用户所在的群组
+        Map<Integer, Group_info> groups = model.getGroups();
+        if (groups.isEmpty()) {
+            showError("您需要先加入群组才能创建小组");
+            return;
+        }
+        
+        // 创建群组选择下拉菜单
+        JComboBox<GroupItem> groupCombo = new JComboBox<>();
+        for (Group_info group : groups.values()) {
+            groupCombo.addItem(new GroupItem(group));
+        }
+        
+        // 创建小组名称输入框
+        JTextField nameField = new JTextField(20);
+        
+        // 创建面板
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        panel.add(new JLabel("选择群组:"));
+        panel.add(groupCombo);
+        panel.add(new JLabel("小组名称:"));
+        panel.add(nameField);
+        
+        // 显示对话框
+        int result = JOptionPane.showConfirmDialog(
+            this, panel, "创建小组", 
+            JOptionPane.OK_CANCEL_OPTION, 
+            JOptionPane.PLAIN_MESSAGE
+        );
+        
+        if (result == JOptionPane.OK_OPTION) {
+            // 获取选择的群组和输入的名称
+            GroupItem selectedGroup = (GroupItem) groupCombo.getSelectedItem();
+            String orgName = nameField.getText().trim();
+            
+            if (orgName.isEmpty()) {
+                showError("小组名称不能为空");
+                return;
+            }
+            
+            if (selectedGroup != null) {
+                // 显示成员选择对话框
+                showSelectMembersForOrgDialog(selectedGroup, orgName);
+            }
+        }
+    }
+    
+    /**
+     * 显示选择小组成员对话框
+     */
+    private void showSelectMembersForOrgDialog(GroupItem group, String orgName) {
+        Group_info groupInfo = group.getGroupInfo();
+        ArrayList<String> groupMembers = groupInfo.getMembers();
+        
+        // 创建成员选择列表
+        JPanel memberPanel = new JPanel();
+        memberPanel.setLayout(new BoxLayout(memberPanel, BoxLayout.Y_AXIS));
+        
+        ArrayList<JCheckBox> checkBoxes = new ArrayList<>();
+        for (String member : groupMembers) {
+            JCheckBox checkBox = new JCheckBox(member);
+            // 当前用户默认选中
+            if (member.equals(currentUsername)) {
+                checkBox.setSelected(true);
+                checkBox.setEnabled(false); // 不允许取消选择自己
+            }
+            checkBoxes.add(checkBox);
+            memberPanel.add(checkBox);
+        }
+        
+        JScrollPane scrollPane = new JScrollPane(memberPanel);
+        scrollPane.setPreferredSize(new Dimension(200, 200));
+        
+        // 显示对话框
+        int result = JOptionPane.showConfirmDialog(
+            this, scrollPane, "选择小组成员", 
+            JOptionPane.OK_CANCEL_OPTION, 
+            JOptionPane.PLAIN_MESSAGE
+        );
+        
+        if (result == JOptionPane.OK_OPTION) {
+            // 收集选择的成员
+            ArrayList<String> selectedMembers = new ArrayList<>();
+            for (int i = 0; i < checkBoxes.size(); i++) {
+                if (checkBoxes.get(i).isSelected()) {
+                    selectedMembers.add(groupMembers.get(i));
+                }
+            }
+            
+            // 检查至少选择了一个成员
+            if (selectedMembers.size() < 2) { // 至少要有自己和另一个人
+                showError("请至少选择一个其他成员");
+                return;
+            }
+            
+            // 创建小组
+            controller.createOrg(group.getId(), orgName, selectedMembers);
+        }
+    }
+    
+    /**
+     * 显示小组右键菜单
+     */
+    private void showOrgContextMenu(OrgItem org, int x, int y) {
+        JPopupMenu menu = new JPopupMenu();
+        
+        // 创建菜单项
+        JMenuItem chatItem = new JMenuItem("打开聊天");
+        chatItem.addActionListener(e -> openOrgChat(org));
+        
+        JMenuItem addItem = new JMenuItem("添加成员");
+        addItem.addActionListener(e -> showAddMemberToOrgDialog(org));
+        
+        JMenuItem removeItem = new JMenuItem("移除成员");
+        removeItem.addActionListener(e -> showRemoveMemberFromOrgDialog(org));
+        
+        JMenuItem leaveItem = new JMenuItem("退出小组");
+        leaveItem.addActionListener(e -> confirmLeaveOrg(org));
+        
+        menu.add(chatItem);
+        menu.addSeparator();
+        menu.add(addItem);
+        menu.add(removeItem);
+        menu.addSeparator();
+        menu.add(leaveItem);
+        
+        // 显示菜单
+        menu.show(orgList, x, y);
+    }
+    
+    /**
+     * 显示添加小组成员对话框
+     */
+    private void showAddMemberToOrgDialog(OrgItem org) {
+        Org_info orgInfo = org.getOrgInfo();
+        int groupId = orgInfo.getGroup_id();
+        
+        // 获取所在群组
+        Group_info parentGroup = model.getGroups().get(groupId);
+        if (parentGroup == null) {
+            showError("无法获取小组所属的群组信息");
+            return;
+        }
+        
+        // 获取群组成员列表
+        ArrayList<String> groupMembers = parentGroup.getMembers();
+        ArrayList<String> orgMembers = orgInfo.getMembers();
+        
+        // 过滤出未加入小组的群组成员
+        ArrayList<String> nonOrgMembers = new ArrayList<>();
+        for (String member : groupMembers) {
+            if (!orgMembers.contains(member)) {
+                nonOrgMembers.add(member);
+            }
+        }
+        
+        if (nonOrgMembers.isEmpty()) {
+            showError("群组中所有成员已加入小组");
+            return;
+        }
+        
+        // 显示成员选择对话框
+        String[] members = nonOrgMembers.toArray(new String[0]);
+        String selectedMember = (String) JOptionPane.showInputDialog(
+            this, "选择要添加的成员", "添加小组成员",
+            JOptionPane.PLAIN_MESSAGE, null, members, members[0]
+        );
+        
+        if (selectedMember != null) {
+            controller.addUserToOrg(org.getId(), selectedMember);
+        }
+    }
+    
+    /**
+     * 显示移除小组成员对话框
+     */
+    private void showRemoveMemberFromOrgDialog(OrgItem org) {
+        ArrayList<String> members = org.getOrgInfo().getMembers();
+        
+        // 从列表中移除当前用户
+        ArrayList<String> otherMembers = new ArrayList<>(members);
+        otherMembers.remove(currentUsername);
+        
+        if (otherMembers.isEmpty()) {
+            showError("小组中没有其他成员可移除");
+            return;
+        }
+        
+        // 显示成员选择对话框
+        String[] memberArray = otherMembers.toArray(new String[0]);
+        String selectedMember = (String) JOptionPane.showInputDialog(
+            this, "选择要移除的成员", "移除小组成员",
+            JOptionPane.PLAIN_MESSAGE, null, memberArray, memberArray[0]
+        );
+        
+        if (selectedMember != null) {
+            controller.removeUserFromOrg(org.getId(), selectedMember);
+        }
+    }
+    
+    /**
+     * 确认退出小组
+     */
+    private void confirmLeaveOrg(OrgItem org) {
+        int option = JOptionPane.showConfirmDialog(
+            this, "确定要退出 \"" + org.getName() + "\" 小组吗?", 
+            "退出小组", JOptionPane.YES_NO_OPTION
+        );
+        
+        if (option == JOptionPane.YES_OPTION) {
+            controller.leaveOrg(org.getId());
+        }
+    }
+    
+    /**
+     * 打开小组聊天窗口
+     */
+    public void openOrgChat(OrgItem org) {
+        int orgId = org.getId();
+        int groupId = org.getOrgInfo().getGroup_id();
+        
+        if (orgChatWindows.containsKey(orgId)) {
+            // 如果窗口已存在，则激活它
+            ChatView chatView = orgChatWindows.get(orgId);
+            chatView.setVisible(true);
+            chatView.toFront();
+            chatView.requestFocus();
+        } else {
+            // 创建新的小组聊天窗口 (使用ChatView类的小组构造函数)
+            ChatView chatView = new ChatView(controller, model, groupId, orgId, org.getName());
+            chatView.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    orgChatWindows.remove(orgId);
+                }
+            });
+            orgChatWindows.put(orgId, chatView);
+            chatView.setVisible(true);
+        }
+    }
+
+    /**
+     * 更新小组列表
+     */
+    public void updateOrgList() {
+        SwingUtilities.invokeLater(() -> {
+            orgListModel.clear();
+            Map<Integer, Org_info> orgs = model.getOrgs();
+            if (orgs != null) {
+                for (Org_info org : orgs.values()) {
+                    orgListModel.addElement(new OrgItem(org));
+                }
+            }
+        });
+    }
+
+    /**
      * 模型更新回调
      */
     @Override
     public void onModelUpdate(UpdateType updateType) {
-        switch (updateType) {
-            case USERS:
-            case ALL_USERS:
-                updateUserList();
-                break;
-            case GROUPS:
-                updateGroupList();
-                break;
-            case CHAT:
-                // 聊天消息由各聊天窗口处理
-                // 但我们需要更新联系人列表以显示未读消息状态
-                updateUserList();
-                // 同时更新群组列表，显示群聊未读消息
-                updateGroupList();
-                break;
-        }
+        SwingUtilities.invokeLater(() -> {
+            switch (updateType) {
+                case USERS:
+                    updateUserList();
+                    break;
+                case GROUPS:
+                    updateGroupList();
+                    break;
+                case ORGS:
+                    updateOrgList();
+                    break;
+                case ALL_USERS:
+                    updateUserList();
+                    break;
+                case ALL:
+                    updateUserList();
+                    updateGroupList();
+                    updateOrgList();
+                    break;
+            }
+        });
     }
 
     /**
@@ -834,6 +1179,146 @@ public class ContactListView extends JFrame implements ModelObserver {
         @Override
         public String toString() {
             return getName();
+        }
+    }
+
+    /**
+     * 小组列表单元格渲染器
+     */
+    private class OrgListCellRenderer extends DefaultListCellRenderer {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            if (!(value instanceof OrgItem)) {
+                return super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            }
+            
+            OrgItem orgItem = (OrgItem) value;
+            Org_info orgInfo = orgItem.getOrgInfo();
+            
+            // 检查是否有未读消息
+            boolean hasUnread = model.hasUnreadMessages(true, String.valueOf(orgItem.getId()));
+            int unreadCount = 0;
+            if (hasUnread) {
+                java.util.List<Chat_info> unreadMessages = model.getUnreadMessages(true, String.valueOf(orgItem.getId()));
+                unreadCount = unreadMessages != null ? unreadMessages.size() : 0;
+            }
+            
+            // 创建自定义面板
+            JPanel panel = new JPanel(new BorderLayout(5, 0));
+            panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            
+            // 设置选中状态的背景
+            if (isSelected) {
+                panel.setBackground(list.getSelectionBackground());
+            } else {
+                panel.setBackground(list.getBackground());
+            }
+            
+            // 创建左侧头像
+            JPanel avatarPanel = new JPanel() {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    super.paintComponent(g);
+                    g.setColor(new Color(220, 220, 240));
+                    g.fillOval(0, 0, getWidth(), getHeight());
+                    g.setColor(new Color(180, 180, 200));
+                    g.drawOval(0, 0, getWidth() - 1, getHeight() - 1);
+                    
+                    // 绘制小组名称首字母
+                    String name = orgItem.getName();
+                    String initial = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
+                    g.setColor(new Color(100, 100, 180));
+                    g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+                    FontMetrics fm = g.getFontMetrics();
+                    int width = fm.stringWidth(initial);
+                    int height = fm.getAscent();
+                    g.drawString(initial, (getWidth() - width) / 2, (getHeight() + height) / 2 - 2);
+                }
+            };
+            avatarPanel.setPreferredSize(new Dimension(40, 40));
+            
+            // 创建中间信息面板
+            JPanel infoPanel = new JPanel(new GridLayout(2, 1));
+            infoPanel.setOpaque(false);
+            
+            // 显示小组名称，如果有未读消息，显示未读消息数量并加粗红色显示
+            JLabel nameLabel = new JLabel(orgItem.getName() + (hasUnread ? " (" + unreadCount + ")" : ""));
+            nameLabel.setFont(new Font("宋体", Font.BOLD, 14));
+            if (hasUnread) {
+                nameLabel.setForeground(Color.RED);
+            } else if (isSelected) {
+                nameLabel.setForeground(list.getSelectionForeground());
+            }
+            
+            // 显示所属群组ID
+            JLabel groupLabel = new JLabel("群组ID: " + orgInfo.getGroup_id());
+            groupLabel.setFont(new Font("宋体", Font.PLAIN, 12));
+            groupLabel.setForeground(Color.GRAY);
+            
+            infoPanel.add(nameLabel);
+            infoPanel.add(groupLabel);
+            
+            // 创建右侧面板，显示成员数量和未读消息提示
+            JPanel rightPanel = new JPanel(new BorderLayout());
+            rightPanel.setOpaque(false);
+            
+            // 成员数量标签
+            JLabel countLabel = new JLabel(orgInfo.getMembers().size() + "人");
+            countLabel.setFont(new Font("宋体", Font.PLAIN, 12));
+            countLabel.setForeground(new Color(100, 100, 180));
+            
+            rightPanel.add(countLabel, BorderLayout.NORTH);
+            
+            // 如果有未读消息，添加红点提示
+            if (hasUnread) {
+                JPanel notificationPanel = new JPanel() {
+                    @Override
+                    protected void paintComponent(Graphics g) {
+                        super.paintComponent(g);
+                        g.setColor(Color.RED);
+                        g.fillOval(0, 0, 8, 8);
+                    }
+                };
+                notificationPanel.setPreferredSize(new Dimension(10, 10));
+                rightPanel.add(notificationPanel, BorderLayout.CENTER);
+            }
+            
+            // 组装面板
+            panel.add(avatarPanel, BorderLayout.WEST);
+            panel.add(infoPanel, BorderLayout.CENTER);
+            panel.add(rightPanel, BorderLayout.EAST);
+            
+            return panel;
+        }
+    }
+    
+    /**
+     * 小组项类，封装小组信息
+     */
+    private class OrgItem {
+        private Org_info orgInfo;
+        
+        public OrgItem(Org_info orgInfo) {
+            this.orgInfo = orgInfo;
+        }
+        
+        public int getId() {
+            return orgInfo.getOrg_id();
+        }
+        
+        public String getName() {
+            return orgInfo.getOrg_name();
+        }
+        
+        public Org_info getOrgInfo() {
+            return orgInfo;
+        }
+        
+        @Override
+        public String toString() {
+            return orgInfo.getOrg_name();
         }
     }
 }

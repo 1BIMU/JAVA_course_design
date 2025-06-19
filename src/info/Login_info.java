@@ -17,6 +17,8 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的组信息，包括组ID，组内所有成员
     private ArrayList<Integer> orgIDList;
     private Map<Integer,ArrayList<String>> orgMap;
+    // 小组名称映射
+    private Map<Integer,String> orgNameMap;
 
     private boolean Kicked = false;//默认为false，标记是否被漫游用户挤下去
     private String userName;
@@ -112,5 +114,21 @@ public class Login_info implements Serializable{//每次登录成功之后或者
      */
     public Map<Integer, String> getGroupNameMap() {
         return groupNameMap;
+    }
+    
+    /**
+     * 获取小组名称映射
+     * @return 小组ID到名称的映射
+     */
+    public Map<Integer, String> getOrgNameMap() {
+        return orgNameMap;
+    }
+    
+    /**
+     * 设置小组名称映射
+     * @param orgNameMap 小组ID到名称的映射
+     */
+    public void setOrgNameMap(Map<Integer, String> orgNameMap) {
+        this.orgNameMap = orgNameMap;
     }
 }

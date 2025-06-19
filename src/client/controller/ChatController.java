@@ -12,6 +12,7 @@ import client.model.ClientModel;
 import client.view.ChatView;
 import info.Chat_info;
 import info.Group_info;
+import info.Org_info;
 import io.FileIO;
 
 /*
@@ -455,5 +456,202 @@ public class ChatController {
      */
     public interface HistoryCallback {
         void onHistoryLoaded(List<String> history);
+    }
+    
+    /**
+     * 创建小组
+     * @param groupId 所属群组ID
+     * @param orgName 小组名称
+     * @param members 小组成员列表
+     */
+    public void createOrg(int groupId, String orgName, List<String> members) {
+        // 输入验证
+        if (orgName == null || orgName.trim().isEmpty()) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("小组名称不能为空");
+            }
+            return;
+        }
+        if (members == null || members.isEmpty()) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("小组成员不能为空");
+            }
+            return;
+        }
+        
+        // 确保当前用户在小组中
+        if (!members.contains(model.getCurrentUser())) {
+            members.add(model.getCurrentUser());
+        }
+        
+        // 使用MessageSender发送创建小组请求
+        boolean success = messageSender.sendCreateOrgRequest(groupId, orgName, members);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("创建小组失败");
+            }
+        }
+    }
+    
+    /**
+     * 退出小组
+     * @param orgId 小组ID
+     */
+    public void leaveOrg(int orgId) {
+        // 使用MessageSender发送退出小组请求
+        boolean success = messageSender.sendLeaveOrgRequest(orgId);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("退出小组失败");
+            }
+        }
+    }
+    
+    /**
+     * 添加用户到小组
+     * @param orgId 小组ID
+     * @param username 用户名
+     */
+    public void addUserToOrg(int orgId, String username) {
+        // 获取当前小组信息
+        Org_info currentOrg = model.getOrgs().get(orgId);
+        if (currentOrg == null) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("小组不存在");
+            }
+            return;
+        }
+        
+        // 创建新的成员列表
+        ArrayList<String> newMembers = new ArrayList<>(currentOrg.getMembers());
+        
+        // 检查用户是否已在小组中
+        if (newMembers.contains(username)) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("用户已在小组中");
+            }
+            return;
+        }
+        
+        // 添加新成员
+        newMembers.add(username);
+        
+        // 使用MessageSender发送更新小组请求
+        boolean success = messageSender.sendUpdateOrgRequest(
+            orgId, currentOrg.getOrg_name(), newMembers);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("添加用户到小组失败");
+            }
+        }
+    }
+    
+    /**
+     * 从小组中移除用户
+     * @param orgId 小组ID
+     * @param username 用户名
+     */
+    public void removeUserFromOrg(int orgId, String username) {
+        // 获取当前小组信息
+        Org_info currentOrg = model.getOrgs().get(orgId);
+        if (currentOrg == null) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("小组不存在");
+            }
+            return;
+        }
+        
+        // 创建新的成员列表
+        ArrayList<String> newMembers = new ArrayList<>(currentOrg.getMembers());
+        
+        // 检查用户是否在小组中
+        if (!newMembers.contains(username)) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("用户不在小组中");
+            }
+            return;
+        }
+        
+        // 移除成员
+        newMembers.remove(username);
+        
+        // 如果没有成员了，则解散小组
+        if (newMembers.isEmpty()) {
+            leaveOrg(orgId);
+            return;
+        }
+        
+        // 使用MessageSender发送更新小组请求
+        boolean success = messageSender.sendUpdateOrgRequest(
+            orgId, currentOrg.getOrg_name(), newMembers);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("从小组中移除用户失败");
+            }
+        }
+    }
+    
+    /**
+     * 发送小组消息
+     * @param groupId 群组ID
+     * @param orgId 小组ID
+     * @param message 消息内容
+     */
+    public void sendOrgMessage(int groupId, int orgId, String message) {
+        // 使用MessageSender发送小组消息
+        boolean success = messageSender.sendOrgChatMessage(model.getCurrentUser(), message, groupId, orgId);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("发送小组消息失败");
+            }
+        }
+    }
+    
+    /**
+     * 处理小组创建成功事件
+     * @param orgInfo 小组信息
+     */
+    public void onOrgCreated(Org_info orgInfo) {
+        for (ChatView chatView : chatViews.values()) {
+            chatView.updateGroupList();
+            chatView.showMessage("小组 \"" + orgInfo.getOrg_name() + "\" 创建成功");
+        }
+    }
+    
+    /**
+     * 处理小组更新事件
+     * @param orgInfo 小组信息
+     */
+    public void onOrgUpdated(Org_info orgInfo) {
+        for (ChatView chatView : chatViews.values()) {
+            chatView.updateGroupList();
+            chatView.showMessage("小组 \"" + orgInfo.getOrg_name() + "\" 已更新");
+        }
+    }
+    
+    /**
+     * 处理被移出小组事件
+     * @param orgInfo 小组信息
+     */
+    public void onRemovedFromOrg(Org_info orgInfo) {
+        for (ChatView chatView : chatViews.values()) {
+            chatView.updateGroupList();
+            chatView.showMessage("您已被移出小组 \"" + orgInfo.getOrg_name() + "\"");
+        }
+    }
+    
+    /**
+     * 显示错误消息
+     * @param errorMessage 错误消息
+     */
+    public void showError(String errorMessage) {
+        for (ChatView chatView : chatViews.values()) {
+            chatView.showError(errorMessage);
+        }
     }
 } 

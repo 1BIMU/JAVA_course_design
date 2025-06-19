@@ -4,6 +4,7 @@ import client.controller.LoginController;
 import client.model.ClientModel;
 import info.Group_info;
 import info.Login_info;
+import info.Org_info;
 import info.encap_info;
 
 import javax.swing.*;
@@ -70,6 +71,9 @@ public class LoginMessageHandler implements ClientMessageHandler {
                 // 处理群组信息 - 处理服务器发送的群组列表
                 processGroupInfo(loginInfo);
                 
+                // 处理小组信息 - 处理服务器发送的小组列表
+                processOrgInfo(loginInfo);
+                
                 // 通知登录控制器登录成功
                 loginController.onLoginSuccess();
             } else {
@@ -83,6 +87,9 @@ public class LoginMessageHandler implements ClientMessageHandler {
                 
                 // 处理群组信息 - 也需要处理服务器可能发送的群组列表更新
                 processGroupInfo(loginInfo);
+                
+                // 处理小组信息 - 也需要处理服务器可能发送的小组列表更新
+                processOrgInfo(loginInfo);
             }
         } else {
             // 这是其他用户的登录通知，只更新在线用户列表，不改变当前用户
@@ -138,6 +145,58 @@ public class LoginMessageHandler implements ClientMessageHandler {
             }
         } else {
             System.out.println("没有收到群组信息或群组信息为空");
+        }
+    }
+    
+    /**
+     * 处理服务器发送的小组信息
+     * @param loginInfo 登录信息对象
+     */
+    private void processOrgInfo(Login_info loginInfo) {
+        // 获取小组ID列表
+        ArrayList<Integer> orgIDList = loginInfo.getOrgIDList();
+        Map<Integer, ArrayList<String>> orgMap = loginInfo.getOrgMap();
+        Map<Integer, String> orgNameMap = loginInfo.getOrgNameMap();
+        
+        if (orgIDList != null && orgMap != null) {
+            System.out.println("收到小组信息：" + orgIDList.size() + " 个小组");
+            
+            // 清除现有小组信息，准备更新
+            model.clearOrgs();
+            
+            // 处理每个小组信息
+            for (Integer orgId : orgIDList) {
+                ArrayList<String> members = orgMap.get(orgId);
+                if (members != null) {
+                    // 创建小组信息对象
+                    Org_info orgInfo = new Org_info();
+                    orgInfo.setOrg_id(orgId);
+                    
+                    // 使用服务器提供的小组名称
+                    String orgName;
+                    if (orgNameMap != null && orgNameMap.containsKey(orgId)) {
+                        orgName = orgNameMap.get(orgId);
+                    } else {
+                        // 如果没有提供名称，使用默认名称
+                        orgName = "小组 " + orgId;
+                        if (!members.isEmpty()) {
+                            orgName = "用户 " + members.get(0) + " 的小组";
+                        }
+                    }
+                    
+                    orgInfo.setOrg_name(orgName);
+                    orgInfo.setMembers(members);
+                    orgInfo.setEstablish(false); // 非新建小组
+                    orgInfo.setExist(true); // 小组存在
+                    orgInfo.setSuccess(true); // 标记为成功
+                    
+                    // 更新到模型中
+                    model.updateOrg(orgInfo);
+                    System.out.println("添加小组: ID=" + orgId + ", 名称=" + orgName + ", 成员=" + members.size());
+                }
+            }
+        } else {
+            System.out.println("没有收到小组信息或小组信息为空");
         }
     }
 } 
