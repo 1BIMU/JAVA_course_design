@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 public class FileIO {
     // 默认文件路径
@@ -80,7 +82,7 @@ public class FileIO {
     // endregion
 
     // region 群聊相关操作
-    public void writeGroup(int groupId, ArrayList<String> members) throws IOException {
+    public void writeGroup(int groupId, String groupName, ArrayList<String> members) throws IOException {
         // 移除旧记录（如果存在）
         List<String> groups = Files.exists(groupFilePath) ?
                 Files.readAllLines(groupFilePath) :
@@ -88,13 +90,20 @@ public class FileIO {
 
         groups.removeIf(line -> line.startsWith(groupId + "|"));
 
-        // 添加新记录
-        String record = groupId + "|" + String.join(",", members);
+        // 添加新记录，包含群组名称
+        String record = groupId + "|" + groupName + "|" + String.join(",", members);
         groups.add(record);
 
         Files.write(groupFilePath, groups,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING);
+    }
+    
+    // 兼容旧方法，但加上默认群名
+    public void writeGroup(int groupId, ArrayList<String> members) throws IOException {
+        // 默认群组名称
+        String defaultGroupName = "群聊 " + groupId;
+        writeGroup(groupId, defaultGroupName, members);
     }
 
     public boolean groupExists(int groupId) throws IOException {
@@ -115,11 +124,12 @@ public class FileIO {
         }
 
         Files.lines(groupFilePath).forEach(line -> {
-            String[] parts = line.split("\\|", 2);
-            if (parts.length == 2) {
+            String[] parts = line.split("\\|");
+            if (parts.length >= 3) {  // 现在格式是 groupId|groupName|members
                 try {
                     int groupId = Integer.parseInt(parts[0]);
-                    List<String> members = Arrays.asList(parts[1].split(","));
+                    // 第三部分是成员列表
+                    List<String> members = Arrays.asList(parts[2].split(","));
                     if (members.contains(username)) {
                         groupIds.add(groupId);
                     }
@@ -139,10 +149,68 @@ public class FileIO {
                 .findFirst()
                 .map(line -> {
                     String[] parts = line.split("\\|");
-                    if (parts.length < 2 || parts[1].isEmpty()) {
+                    if (parts.length < 3 || parts[2].isEmpty()) {
                         return new ArrayList<String>();
                     }
-                    return new ArrayList<>(Arrays.asList(parts[1].split(",")));
+                    return new ArrayList<>(Arrays.asList(parts[2].split(",")));
+                })
+                .orElse(null);
+    }
+    
+    /**
+     * 获取群组名称
+     * @param groupId 群组ID
+     * @return 群组名称，如果不存在则返回默认名称
+     */
+    public String getGroupName(int groupId) throws IOException {
+        if (!Files.exists(groupFilePath)) return "群聊 " + groupId;
+
+        return Files.lines(groupFilePath)
+                .filter(line -> line.startsWith(groupId + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    if (parts.length < 2 || parts[1].isEmpty()) {
+                        return "群聊 " + groupId;
+                    }
+                    return parts[1];
+                })
+                .orElse("群聊 " + groupId);
+    }
+    
+    /**
+     * 获取群组信息（名称和成员）
+     * @param groupId 群组ID
+     * @return 包含名称和成员的Map，如果不存在则返回null
+     */
+    public Map<String, Object> getGroupInfo(int groupId) throws IOException {
+        if (!Files.exists(groupFilePath)) return null;
+
+        return Files.lines(groupFilePath)
+                .filter(line -> line.startsWith(groupId + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    Map<String, Object> info = new HashMap<>();
+                    
+                    // 设置默认名称
+                    String name = "群聊 " + groupId;
+                    
+                    // 如果有名称部分，使用它
+                    if (parts.length >= 2) {
+                        name = parts[1];
+                    }
+                    
+                    info.put("name", name);
+                    
+                    // 处理成员列表
+                    ArrayList<String> members = new ArrayList<>();
+                    if (parts.length >= 3 && !parts[2].isEmpty()) {
+                        members = new ArrayList<>(Arrays.asList(parts[2].split(",")));
+                    }
+                    
+                    info.put("members", members);
+                    return info;
                 })
                 .orElse(null);
     }
@@ -162,15 +230,27 @@ public class FileIO {
             String line = groups.get(i);
             if (line.startsWith(groupId + "|")) {
                 found = true;
-                // 更新记录
-                groups.set(i, groupId + "|" + String.join(",", members));
+                // 解析群组名称
+                String[] parts = line.split("\\|");
+                String groupName;
+                
+                // 获取群组名称，如果有
+                if (parts.length >= 2) {
+                    groupName = parts[1];
+                } else {
+                    groupName = "群聊 " + groupId;
+                }
+                
+                // 更新记录，保持群组名称不变
+                groups.set(i, groupId + "|" + groupName + "|" + String.join(",", members));
                 break;
             }
         }
 
         if (!found) {
-            // 如果群组不存在，则创建新记录
-            groups.add(groupId + "|" + String.join(",", members));
+            // 如果群组不存在，则创建新记录，使用默认名称
+            String defaultGroupName = "群聊 " + groupId;
+            groups.add(groupId + "|" + defaultGroupName + "|" + String.join(",", members));
         }
 
         // 写回文件
@@ -219,14 +299,23 @@ public class FileIO {
             String line = groups.get(i);
             if (line.startsWith(groupId + "|")) {
                 found = true;
-                // 解析现有成员
+                // 解析现有成员和群组名称
                 String[] parts = line.split("\\|");
+                String groupName;
                 ArrayList<String> members;
                 
-                if (parts.length < 2 || parts[1].isEmpty()) {
-                    members = new ArrayList<>();
+                // 获取群组名称
+                if (parts.length >= 2) {
+                    groupName = parts[1];
                 } else {
-                    members = new ArrayList<>(Arrays.asList(parts[1].split(",")));
+                    groupName = "群聊 " + groupId;
+                }
+                
+                // 获取成员列表
+                if (parts.length >= 3 && !parts[2].isEmpty()) {
+                    members = new ArrayList<>(Arrays.asList(parts[2].split(",")));
+                } else {
+                    members = new ArrayList<>();
                 }
 
                 // 添加新成员（去重）
@@ -243,8 +332,8 @@ public class FileIO {
                     members.removeAll(removeUsers);
                 }
 
-                // 更新记录
-                groups.set(i, groupId + "|" + String.join(",", members));
+                // 更新记录，保持群组名称不变
+                groups.set(i, groupId + "|" + groupName + "|" + String.join(",", members));
                 break;
             }
         }
@@ -252,7 +341,9 @@ public class FileIO {
         if (!found) {
             // 如果群组不存在，则创建新记录（仅当有添加用户时）
             if (addUsers != null && !addUsers.isEmpty()) {
-                groups.add(groupId + "|" + String.join(",", addUsers));
+                // 创建新群组，使用默认名称
+                String groupName = "群聊 " + groupId;
+                groups.add(groupId + "|" + groupName + "|" + String.join(",", addUsers));
             } else {
                 throw new IllegalArgumentException("群组 " + groupId + " 不存在");
             }

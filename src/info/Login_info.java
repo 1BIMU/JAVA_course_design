@@ -11,6 +11,8 @@ public class Login_info implements Serializable{//每次登录成功之后或者
     //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的群，包括群ID，群所有成员
     private ArrayList<Integer> groupIDList;
     private Map<Integer,ArrayList<String>> groupMap;
+    // 群组名称映射
+    private Map<Integer,String> groupNameMap;
 
     //添加同步信息，在用户登录时发送在服务端存储的所有和该用户相关的组信息，包括组ID，组内所有成员
     private ArrayList<Integer> orgIDList;
@@ -94,5 +96,21 @@ public class Login_info implements Serializable{//每次登录成功之后或者
      */
     public void setAllUsers(ArrayList<String> allUsers) {
         this.allUsers = allUsers;
+    }
+    
+    /**
+     * 设置群组名称映射
+     * @param groupNameMap 群组ID到名称的映射
+     */
+    public void setGroupNameMap(Map<Integer, String> groupNameMap) {
+        this.groupNameMap = groupNameMap;
+    }
+    
+    /**
+     * 获取群组名称映射
+     * @return 群组ID到名称的映射
+     */
+    public Map<Integer, String> getGroupNameMap() {
+        return groupNameMap;
     }
 }

@@ -59,8 +59,8 @@ public class LoginMessageHandler implements ClientMessageHandler {
             model.setAllUsers(allUsers);
         }
         
-        // 检查是初次登录消息还是更新消息
-        if (model.getCurrentUser() == null || !model.getCurrentUser().equals(loginInfo.getUserName())) {
+        // 检查是初次登录消息还是更新消息   
+        if (model.getCurrentUser() == null || !model.isLoggedIn()) {
             // 初次登录消息处理
             if (loginInfo.getLoginSuccessFlag()) {
                 // 设置当前用户
@@ -98,6 +98,7 @@ public class LoginMessageHandler implements ClientMessageHandler {
         // 获取群组ID列表
         ArrayList<Integer> groupIDList = loginInfo.getGroupIDList();
         Map<Integer, ArrayList<String>> groupMap = loginInfo.getGroupMap();
+        Map<Integer, String> groupNameMap = loginInfo.getGroupNameMap();
         
         if (groupIDList != null && groupMap != null) {
             System.out.println("收到群组信息：" + groupIDList.size() + " 个群组");
@@ -112,11 +113,19 @@ public class LoginMessageHandler implements ClientMessageHandler {
                     // 创建群组信息对象
                     Group_info groupInfo = new Group_info();
                     groupInfo.set_Group_id(groupId);
-                    // 尝试从成员列表第一个元素设置群组名称，如果没有就用默认名称
-                    String groupName = "群聊 " + groupId;
-                    if (!members.isEmpty()) {
-                        groupName = "用户 " + members.get(0) + " 的群组";
+                    
+                    // 使用服务器提供的群组名称
+                    String groupName;
+                    if (groupNameMap != null && groupNameMap.containsKey(groupId)) {
+                        groupName = groupNameMap.get(groupId);
+                    } else {
+                        // 如果没有提供名称，使用默认名称
+                        groupName = "群聊 " + groupId;
+                        if (!members.isEmpty()) {
+                            groupName = "用户 " + members.get(0) + " 的群组";
+                        }
                     }
+                    
                     groupInfo.set_Group_name(groupName);
                     groupInfo.setMembers(members);
                     groupInfo.setEstablish(false); // 非新建群组

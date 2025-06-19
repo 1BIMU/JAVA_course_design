@@ -1,16 +1,20 @@
 package Server.controller;
-import Server.ServerHandler;
-import Server.view.ServerWindow;
+
 import Server.ChatServer;
+import Server.ServerHandler;
+import Server.model.ServerModel;
+import Server.view.ServerWindow;
 import info.*;
 import io.FileIO;
 import io.IOStream;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
 
-import Server.model.ServerModel;
 public class ServerController {
     Socket socket;
     ChatServer server;
@@ -87,6 +91,14 @@ public class ServerController {
             Map<Integer,ArrayList<String>> groupMap = model.groupMap(groups);
             tfi.setGroupMap(groupMap);
             tfi.setGroupIDList(groups);
+            
+            // 获取群组名称信息
+            Map<Integer, String> groupNameMap = new HashMap<>();
+            for (Integer groupId : groups) {
+                String groupName = FI.getGroupName(groupId);
+                groupNameMap.put(groupId, groupName);
+            }
+            tfi.setGroupNameMap(groupNameMap);
 
             //发送所有的组消息给该用户
             ArrayList<Integer> orgs = FI_org.getGroupsByUser(tfi.getUserName());
@@ -180,9 +192,14 @@ public class ServerController {
             }
             //写入服务端的数据文件中
             System.out.println(ID);
-            System.out.println(to_user);//为什么这里收到的to_user是Null??
-            ServerFrame.appendLog("创建新群组 ID: " + ID + "，成员: " + to_user);
-            fileio.writeGroup(ID,to_user);
+            System.out.println(to_user);
+            String groupName = gi.get_Group_name();
+            // 如果名称为空，使用默认名称
+            if (groupName == null || groupName.isEmpty()) {
+                groupName = "群聊 " + ID;
+            }
+            ServerFrame.appendLog("创建新群组 ID: " + ID + ", 名称: " + groupName + ", 成员: " + to_user);
+            fileio.writeGroup(ID, groupName, to_user);
             //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
             gi.set_Group_id(ID);
             model.Send2Users(INFO,to_user);
