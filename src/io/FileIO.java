@@ -75,16 +75,9 @@ public class FileIO {
     }
 
     // region 用户相关操作
+    // 修改现有writeUser方法以兼容旧格式
     public boolean writeUser(String username, String password) throws IOException {
-        if (userExists(username)) {
-            return false;
-        }
-
-        String record = username + "|" + password + "\n";
-        Files.write(userFilePath, record.getBytes(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.APPEND);
-        return true;
+        return writeUser(username, password, ""); // 默认空IP
     }
 
     public boolean userExists(String username) throws IOException {
@@ -662,5 +655,119 @@ public class FileIO {
         writeOrg(orgId, orgName, currentMembers);
     }
     // endregion
+
+    // 在用户相关操作区域添加以下方法
+
+    /**
+     * 写入用户IP地址
+     * @param username 用户名
+     * @param ip IP地址
+     * @return 是否成功写入
+     * @throws IOException 如果发生I/O错误
+     */
+    public boolean writeUserIP(String username, String ip) throws IOException {
+        if (!Files.exists(userFilePath)) return false;
+
+        // 读取所有用户记录
+        List<String> lines = Files.readAllLines(userFilePath);
+        boolean found = false;
+
+        // 查找用户并更新IP
+        for (int i = 0; i < lines.size(); i++) {
+            String[] parts = lines.get(i).split("\\|");
+            if (parts.length > 0 && parts[0].equals(username)) {
+                // 格式: username|password|ip
+                String newRecord;
+                if (parts.length >= 3) {
+                    // 替换现有IP
+                    newRecord = parts[0] + "|" + parts[1] + "|" + ip;
+                } else if (parts.length == 2) {
+                    // 添加IP字段
+                    newRecord = lines.get(i) + "|" + ip;
+                } else {
+                    // 无效记录，跳过
+                    continue;
+                }
+                lines.set(i, newRecord);
+                found = true;
+                break;
+            }
+        }
+
+        if (found) {
+            // 覆盖写入
+            Files.write(userFilePath, lines,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 获取用户IP地址
+     * @param username 用户名
+     * @return IP地址，如果用户不存在或没有IP则返回空字符串
+     * @throws IOException 如果发生I/O错误
+     */
+    public String getUserIP(String username) throws IOException {
+        if (!Files.exists(userFilePath)) return "";
+
+        return Files.lines(userFilePath)
+                .filter(line -> line.startsWith(username + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    // 格式: username|password|ip
+                    if (parts.length >= 3) {
+                        return parts[2];
+                    }
+                    return ""; // 没有IP记录
+                })
+                .orElse(""); // 用户不存在
+    }
+
+    /**
+     * 获取所有用户及其IP的映射
+     * @return 用户-IP映射表
+     * @throws IOException 如果发生I/O错误
+     */
+    public Map<String, String> getAllUserIPs() throws IOException {
+        Map<String, String> userIPs = new HashMap<>();
+
+        if (!Files.exists(userFilePath)) {
+            return userIPs;
+        }
+
+        Files.lines(userFilePath).forEach(line -> {
+            String[] parts = line.split("\\|");
+            if (parts.length >= 3) { // 确保有IP字段
+                userIPs.put(parts[0], parts[2]);
+            } else if (parts.length >= 1) {
+                // 用户存在但没有IP记录
+                userIPs.put(parts[0], "");
+            }
+        });
+
+        return userIPs;
+    }
+
+    /**
+     * 更新用户写入方法以支持IP (可选)
+     * 保持原有方法签名不变，增加带IP的注册方法
+     */
+    public boolean writeUser(String username, String password, String ip) throws IOException {
+        if (userExists(username)) {
+            return false;
+        }
+
+        String record = username + "|" + password + "|" + ip + "\n";
+        Files.write(userFilePath, record.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
+        return true;
+    }
+
+
 }
 

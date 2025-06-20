@@ -7,7 +7,7 @@ public class Chat_info implements Serializable {
     private byte[] image;//二进制图片数据
     private String imageName;//图片名称
 
-    private int message_type = 0;//消息类型 0为字符串型消息，1为图片类型消息
+    private int message_type = 0;//消息类型 0为字符串型消息，1为图片类型消息，电话的方式不在这里做了，用UDP来做
     private boolean type;//标记是私聊消息还是群聊消息，如果为0，那么是私聊消息，如果为1，那么是群聊消息
     private boolean isOrgMessage = false; // 是否为小组消息
     private String from_username;//当前用户
@@ -18,7 +18,15 @@ public class Chat_info implements Serializable {
     
     public Chat_info() {
     }
-    
+
+    public void setMessageType(int message_type) {
+        this.message_type = message_type;
+    }
+
+    public int getMessageType() {
+        return message_type;
+    }
+
     public String getText() {
         return text;
     }

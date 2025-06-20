@@ -1,10 +1,8 @@
 package io;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
+import info.Conference_info;
+
+import java.io.*;
 import java.net.Socket;
 // 封装好的IO接口
 public class IOStream {
@@ -36,4 +34,5 @@ public class IOStream {
 			return false;
 		}
 	}
+
 }

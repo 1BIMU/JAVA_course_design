@@ -31,3 +31,4 @@ bin/
 *.dat
 *.txt
 *.log
+*.py

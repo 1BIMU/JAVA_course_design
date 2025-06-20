@@ -47,6 +47,8 @@ public class ServerController {
             ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录成功");
             this.current_user = tfi.getUserName(); // 只有登录成功才设置当前用户
             this.server.add_online_socket(socket);
+            //更新存储的用户的IP地址
+            FI.writeUserIP(this.current_user,socket.getInetAddress().getHostAddress());//存储当前用户的IP地址~方便后续UDP通信
             if(isOline) {//如果用户已经上线了，那么需要把原来的socket干掉，然后发送一条被踢出的信息
                 ServerFrame.appendLog("用户 "+ tfi.getUserName() + "已经在线，踢出原设备消息已发送");
                 Socket old_socket = server.userSocketMap.get(this.current_user);
