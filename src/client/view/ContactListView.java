@@ -3,11 +3,13 @@ package client.view;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
 import client.controller.ChatController;
+import client.controller.VoiceCallController;
 import client.model.ClientModel;
 import client.model.ClientModel.ModelObserver;
 import client.model.ClientModel.UpdateType;
@@ -25,6 +27,7 @@ public class ContactListView extends JFrame implements ModelObserver {
     // 控制器引用
     private ChatController controller;
     private ClientModel model;
+    private VoiceCallController voiceCallController;
 
     // 界面组件
     private JTabbedPane tabbedPane;
@@ -200,6 +203,52 @@ public class ContactListView extends JFrame implements ModelObserver {
                     String selectedUser = userList.getSelectedValue();
                     if (selectedUser != null && !selectedUser.equals(currentUsername)) {
                         openPrivateChat(selectedUser);
+                    }
+                }
+            }
+            
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showUserContextMenu(e);
+                }
+            }
+            
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showUserContextMenu(e);
+                }
+            }
+            
+            private void showUserContextMenu(MouseEvent e) {
+                int index = userList.locationToIndex(e.getPoint());
+                if (index != -1) {
+                    userList.setSelectedIndex(index);
+                    String selectedUser = userList.getSelectedValue();
+                    if (selectedUser != null && !selectedUser.equals(currentUsername)) {
+                        JPopupMenu contextMenu = new JPopupMenu();
+                        
+                        JMenuItem chatItem = new JMenuItem("发送消息");
+                        chatItem.addActionListener(new ActionListener() {
+                            @Override
+                            public void actionPerformed(ActionEvent e) {
+                                openPrivateChat(selectedUser);
+                            }
+                        });
+                        
+                        JMenuItem callItem = new JMenuItem("语音通话");
+                        callItem.addActionListener(new ActionListener() {
+                            @Override
+                            public void actionPerformed(ActionEvent e) {
+                                initiateVoiceCall(selectedUser);
+                            }
+                        });
+                        
+                        contextMenu.add(chatItem);
+                        contextMenu.add(callItem);
+                        
+                        contextMenu.show(userList, e.getX(), e.getY());
                     }
                 }
             }
@@ -441,10 +490,10 @@ public class ContactListView extends JFrame implements ModelObserver {
      * 显示群组上下文菜单
      */
     private void showGroupContextMenu(GroupItem group, int x, int y) {
-        JPopupMenu menu = new JPopupMenu();
+        JPopupMenu contextMenu = new JPopupMenu();
         
-        JMenuItem openItem = new JMenuItem("打开聊天");
-        openItem.addActionListener(e -> openGroupChat(group));
+        JMenuItem chatItem = new JMenuItem("打开群聊");
+        chatItem.addActionListener(e -> openGroupChat(group));
         
         JMenuItem addMemberItem = new JMenuItem("添加成员");
         addMemberItem.addActionListener(e -> showAddMemberDialog(group));
@@ -452,16 +501,22 @@ public class ContactListView extends JFrame implements ModelObserver {
         JMenuItem removeMemberItem = new JMenuItem("移除成员");
         removeMemberItem.addActionListener(e -> showRemoveMemberDialog(group));
         
-        JMenuItem leaveItem = new JMenuItem("退出群组");
-        leaveItem.addActionListener(e -> confirmLeaveGroup(group));
+        JMenuItem leaveGroupItem = new JMenuItem("退出群组");
+        leaveGroupItem.addActionListener(e -> confirmLeaveGroup(group));
         
-        menu.add(openItem);
-        menu.add(addMemberItem);
-        menu.add(removeMemberItem);
-        menu.addSeparator();
-        menu.add(leaveItem);
+        JMenuItem voiceCallItem = new JMenuItem("发起语音会议");
+        voiceCallItem.addActionListener(e -> initiateGroupVoiceCall(group));
         
-        menu.show(groupList, x, y);
+        contextMenu.add(chatItem);
+        contextMenu.addSeparator();
+        contextMenu.add(addMemberItem);
+        contextMenu.add(removeMemberItem);
+        contextMenu.addSeparator();
+        contextMenu.add(voiceCallItem);
+        contextMenu.addSeparator();
+        contextMenu.add(leaveGroupItem);
+        
+        contextMenu.show(groupList, x, y);
     }
 
     /**
@@ -893,13 +948,18 @@ public class ContactListView extends JFrame implements ModelObserver {
      */
     public void updateOrgList() {
         SwingUtilities.invokeLater(() -> {
+            System.out.println("更新小组列表...");
             orgListModel.clear();
             Map<Integer, Org_info> orgs = model.getOrgs();
+            System.out.println("获取到 " + (orgs != null ? orgs.size() : 0) + " 个小组");
             if (orgs != null) {
                 for (Org_info org : orgs.values()) {
+                    System.out.println("添加小组到UI: ID=" + org.getOrg_id() + ", 名称=" + org.getOrg_name() 
+                        + ", 成员=" + org.getMembers() + ", 是否存在=" + org.isExist());
                     orgListModel.addElement(new OrgItem(org));
                 }
             }
+            System.out.println("小组列表更新完成，共 " + orgListModel.size() + " 个小组");
         });
     }
 
@@ -1252,8 +1312,8 @@ public class ContactListView extends JFrame implements ModelObserver {
                 nameLabel.setForeground(list.getSelectionForeground());
             }
             
-            // 显示所属群组ID
-            JLabel groupLabel = new JLabel("群组ID: " + orgInfo.getGroup_id());
+            // 显示小组ID和所属群组ID
+            JLabel groupLabel = new JLabel("小组ID: " + orgInfo.getOrg_id() + ", 群组ID: " + orgInfo.getGroup_id());
             groupLabel.setFont(new Font("宋体", Font.PLAIN, 12));
             groupLabel.setForeground(Color.GRAY);
             
@@ -1265,7 +1325,9 @@ public class ContactListView extends JFrame implements ModelObserver {
             rightPanel.setOpaque(false);
             
             // 成员数量标签
-            JLabel countLabel = new JLabel(orgInfo.getMembers().size() + "人");
+            ArrayList<String> membersList = orgInfo.getMembers();
+            int memberCount = (membersList != null) ? membersList.size() : 0;
+            JLabel countLabel = new JLabel(memberCount + "人");
             countLabel.setFont(new Font("宋体", Font.PLAIN, 12));
             countLabel.setForeground(new Color(100, 100, 180));
             
@@ -1319,6 +1381,39 @@ public class ContactListView extends JFrame implements ModelObserver {
         @Override
         public String toString() {
             return orgInfo.getOrg_name();
+        }
+    }
+
+    /**
+     * 设置语音通话控制器
+     * @param voiceCallController 语音通话控制器
+     */
+    public void setVoiceCallController(VoiceCallController voiceCallController) {
+        this.voiceCallController = voiceCallController;
+    }
+
+    /**
+     * 发起语音通话
+     * @param targetUsername 目标用户名
+     */
+    private void initiateVoiceCall(String targetUsername) {
+        if (voiceCallController != null) {
+            voiceCallController.initiateCall(targetUsername);
+        } else {
+            showError("语音通话功能不可用");
+        }
+    }
+    
+    /**
+     * 发起群组语音会议
+     * @param group 群组信息
+     */
+    private void initiateGroupVoiceCall(GroupItem group) {
+        if (voiceCallController != null) {
+            List<String> participants = group.getGroupInfo().getMembers();
+            voiceCallController.initiateConference(participants);
+        } else {
+            showError("语音会议功能不可用");
         }
     }
 }

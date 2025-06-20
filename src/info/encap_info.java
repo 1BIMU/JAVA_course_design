@@ -1,16 +1,25 @@
 package info;
 import java.io.Serializable;
-import java.io.Serial;
 
 public class encap_info implements Serializable {//对各种消息进行封装
-    @Serial
     private static final long serialVersionUID = -2664356335109440843L;
-    private int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，5代表注册消息，6代表组管理消息，如果要添加消息，直接在后面改就行
+    
+    // 消息类型常量
+    public static final int TYPE_GROUP_MESSAGE = 1;     // 群管理消息
+    public static final int TYPE_LOGOUT = 2;            // 登出
+    public static final int TYPE_LOGIN = 3;             // 登录
+    public static final int TYPE_CHAT = 4;              // 聊天类消息
+    public static final int TYPE_REGISTER = 5;          // 注册消息
+    public static final int TYPE_ORG = 6;               // 组管理消息
+    public static final int TYPE_VOICE = 7;             // 语音通话消息
+    
+    private int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，5代表注册消息，6代表组管理消息，7代表语音通话消息
     private Chat_info chat_info;
     private Group_info group_info;
     private Login_info login_info;
     private Reg_info reg_info;
     private Org_info org_info;
+    private Voice_info voice_info; // 新增语音通话信息
     
     public Chat_info get_chat_info(){
         return chat_info;
@@ -55,8 +64,16 @@ public class encap_info implements Serializable {//对各种消息进行封装
     public Org_info get_org_info() {
         return org_info;
     }
+    
     public void set_org_info(Org_info org_info) {
         this.org_info = org_info;
     }
-
+    
+    public Voice_info get_voice_info() {
+        return voice_info;
+    }
+    
+    public void set_voice_info(Voice_info voice_info) {
+        this.voice_info = voice_info;
+    }
 }

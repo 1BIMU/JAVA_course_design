@@ -334,4 +334,22 @@ public class MessageSender {
         
         return IOStream.writeMessage(socket, info);
     }
+    
+    /**
+     * 发送语音通话消息
+     * @param encapInfo 封装的语音通话信息
+     * @return 是否发送成功
+     */
+    public boolean sendVoiceCallMessage(encap_info encapInfo) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        // 确保消息类型正确
+        if (encapInfo.get_type() != encap_info.TYPE_VOICE) {
+            encapInfo.set_type(encap_info.TYPE_VOICE);
+        }
+        
+        return IOStream.writeMessage(socket, encapInfo);
+    }
 }

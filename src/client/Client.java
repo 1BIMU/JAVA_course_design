@@ -6,6 +6,7 @@ import java.net.UnknownHostException;
 
 import client.controller.ChatController;
 import client.controller.LoginController;
+import client.controller.VoiceCallController;
 import client.controller.LoginController.LoginCallback;
 import client.model.ClientModel;
 import client.view.ContactListView;
@@ -26,6 +27,7 @@ public class Client implements LoginCallback {
     private ClientModel model; // 客户端数据模型
     private LoginController loginController; // 登录控制器
     private ChatController chatController; // 聊天控制器
+    private VoiceCallController voiceCallController; // 语音通话控制器
     private ContactListView contactListView; // 联系人列表视图
     private MessageListener messageListener;
     private MessageSender messageSender; // 新增
@@ -55,8 +57,11 @@ public class Client implements LoginCallback {
             
             this.chatController = new ChatController(model, messageSender);
             
+            // 初始化语音通话控制器
+            this.voiceCallController = new VoiceCallController(model, messageSender);
+            
             // 启动消息监听线程
-            this.messageListener = new MessageListener(socket, model, loginController, chatController);
+            this.messageListener = new MessageListener(socket, model, loginController, chatController, voiceCallController);
             this.messageListener.setMessageSender(messageSender);
             this.messageListener.start();
             
@@ -85,6 +90,13 @@ public class Client implements LoginCallback {
     }
     
     /*
+        获取语音通话控制器
+    */
+    public VoiceCallController getVoiceCallController() {
+        return voiceCallController;
+    }
+    
+    /*
         关闭客户端连接
     */
     public void disconnect() {
@@ -92,6 +104,11 @@ public class Client implements LoginCallback {
             // 执行聊天控制器的清理工作，保存聊天记录
             if (chatController != null) {
                 chatController.cleanup();
+            }
+            
+            // 关闭语音通话控制器
+            if (voiceCallController != null) {
+                voiceCallController.shutdown();
             }
             
             // 停止消息监听线程
@@ -161,12 +178,18 @@ public class Client implements LoginCallback {
         // 创建联系人列表视图
         contactListView = new ContactListView(chatController, model, model.getCurrentUser());
         
+        // 设置语音通话控制器的引用
+        if (contactListView != null) {
+            contactListView.setVoiceCallController(voiceCallController);
+        }
+        
         // 注册模型观察者
         model.addObserver(contactListView);
         
         // 初始化视图数据
         contactListView.updateUserList();
         contactListView.updateGroupList();
+        contactListView.updateOrgList();
         
         // 显示联系人列表视图
         contactListView.setVisible(true);

@@ -55,4 +55,12 @@ public class ChatServer {// 服务器启动入口
     public void remove_online_socket(Socket socket){
         this.online_sockets.remove(socket);
     }
+    /**
+     * 根据用户名获取对应的Socket连接
+     * @param username 用户名
+     * @return 用户对应的Socket连接，如果用户不在线则返回null
+     */
+    public Socket getSocketByUsername(String username) {
+        return userSocketMap.get(username);
+    }
 }

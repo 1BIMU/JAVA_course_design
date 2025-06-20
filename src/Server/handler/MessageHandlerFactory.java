@@ -28,6 +28,7 @@ public class MessageHandlerFactory {
         handlers.put(4, new ChatMessageHandler(controller, server, serverWindow, currentUser));
         handlers.put(5, new RegisterMessageHandler(controller, server, serverWindow));
         handlers.put(6, new OrganizationMessageHandler(controller,server,serverWindow,currentUser));
+        handlers.put(7, new VoiceCallMessageHandler(controller, server, serverWindow, currentUser));
     }
     
     /**
@@ -44,9 +45,18 @@ public class MessageHandlerFactory {
      * @param currentUser 当前用户名
      */
     public void updateCurrentUser(String currentUser) {
-        // 更新需要当前用户信息的处理器
-        ((GroupMessageHandler)handlers.get(1)).setCurrentUser(currentUser);
-        ((LogoutMessageHandler)handlers.get(2)).setCurrentUser(currentUser);
-        ((ChatMessageHandler)handlers.get(4)).setCurrentUser(currentUser);
+        // 更新需要用户信息的处理器
+        if (handlers.get(1) instanceof GroupMessageHandler) {
+            ((GroupMessageHandler) handlers.get(1)).setCurrentUser(currentUser);
+        }
+        if (handlers.get(2) instanceof LogoutMessageHandler) {
+            ((LogoutMessageHandler) handlers.get(2)).setCurrentUser(currentUser);
+        }
+        if (handlers.get(4) instanceof ChatMessageHandler) {
+            ((ChatMessageHandler) handlers.get(4)).setCurrentUser(currentUser);
+        }
+        if (handlers.get(7) instanceof VoiceCallMessageHandler) {
+            ((VoiceCallMessageHandler) handlers.get(7)).setCurrentUser(currentUser);
+        }
     }
 } 

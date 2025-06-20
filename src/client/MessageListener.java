@@ -6,6 +6,7 @@ import java.net.SocketException;
 
 import client.controller.ChatController;
 import client.controller.LoginController;
+import client.controller.VoiceCallController;
 import client.handler.ClientMessageHandler;
 import client.handler.ClientMessageHandlerFactory;
 import client.model.ClientModel;
@@ -30,14 +31,15 @@ import io.IOStream;
         使用策略模式重构：
             * 根据消息类型（info.get_type()）获取对应的处理器
             * 将消息分发给对应的处理器处理
-            * 支持处理多种消息类型：登录(3)、聊天(4)、群组(1)、注册(5)、登出(2)
+            * 支持处理多种消息类型：(3)、聊天(4)、群组(1)、注册(5)、登出(2)、组织(6)、语音通话(7)
 */
 
 public class MessageListener extends Thread {
     private Socket socket;   // 与服务器连接的Socket
     private ClientModel model; // 客户端数据模型
-    private LoginController loginController; // 登录控制器
+    private LoginController loginController; // 控制器
     private ChatController chatController; // 聊天控制器
+    private VoiceCallController voiceCallController; // 语音通话控制器
     private boolean running; // 运行标志位
     private ClientMessageHandlerFactory handlerFactory; // 消息处理器工厂
     private MessageSender messageSender; // 消息发送器，用于重连
@@ -47,13 +49,15 @@ public class MessageListener extends Thread {
     */
     public MessageListener(Socket socket, ClientModel model, 
                           LoginController loginController, 
-                          ChatController chatController) {
+                          ChatController chatController,
+                          VoiceCallController voiceCallController) {
         this.socket = socket;   // 与服务器连接的Socket
         this.model = model;     // 客户端数据模型
-        this.loginController = loginController; // 登录控制器
+        this.loginController = loginController; // 控制器
         this.chatController = chatController; // 聊天控制器
+        this.voiceCallController = voiceCallController; // 语音通话控制器
         this.running = true;   // 运行标志位
-        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController);
+        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController, voiceCallController);
     }
     
     /**
