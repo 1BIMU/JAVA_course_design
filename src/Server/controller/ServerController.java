@@ -21,7 +21,7 @@ public class ServerController {
     ServerWindow ServerFrame;
     ServerHandler ServerHandler;
     //实例化model
-    ServerModel model;
+    public ServerModel model;
     String current_user;//标记当前线程服务的用户
     public ServerController(Socket socket, ChatServer server, ServerWindow ServerFrame, ServerHandler handler) {//定义构造方法
         this.socket = socket;

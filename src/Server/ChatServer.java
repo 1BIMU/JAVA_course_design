@@ -1,31 +1,39 @@
 package Server;
 import Server.view.ServerWindow;
 import info.Conference_info;
+import io.FileIO;
 import io.UdpIO;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import Server.model.*;
 public class ChatServer {// 服务器启动入口
     public ArrayList<String> online_users = new ArrayList<String>();//维护在线用户列表
     public ArrayList<Socket> online_sockets = new ArrayList<Socket>();
     public Map<String,Socket> userSocketMap = new HashMap<>();
     public Map<Socket,ServerHandler> SocketHandlerMap = new HashMap<>();
-    //新增UDP Socket
-    private DatagramSocket audioSocket;
+    public Map<Integer, ArrayList<String>> ConferenceOnlineUsersMap = new HashMap<>();//映射关系：会议ID->加入了会议的用户列表
 
+    //新增UDP Socket
+    public DatagramSocket audioSocket;
+    public ServerWindow ServerFrame;
     public int port = 6688;
     public String ip;
+
+    // --- 新增数据结构结束 ---
     public ChatServer() {
         try {
             //建立服务器的Socket监听
             ServerSocket sso = new ServerSocket(port);
             audioSocket = new DatagramSocket(port + 1);//分配新的端口给语音通信模块
             new Thread(this::listenForAudioPackets).start(); // 启动 UDP 监听线程,绑定新的监听函数，防止和TCP冲突
-            ServerWindow ServerFrame  = new ServerWindow();
+            ServerFrame  = new ServerWindow();
             ServerFrame.appendLog("UDP Audio Server started on port: " + (port + 1));
             String ip = InetAddress.getLocalHost().getHostAddress();
             ServerFrame.setVisible(true);
@@ -37,7 +45,6 @@ public class ChatServer {// 服务器启动入口
                 ServerHandler serverHandler = new ServerHandler(socket,this,ServerFrame);//开启一个新的线程，用于服务这个连接上的用户
                 SocketHandlerMap.put(socket,serverHandler);
                 serverHandler.start();
-
                 ServerFrame.appendLog("服务器接受到客户端的连接：" + socket);
             }
         } catch (IOException e) {
@@ -88,7 +95,64 @@ public class ChatServer {// 服务器启动入口
             }
         }
     }
-    private void handleReceivedAudioInfo(Conference_info INFO) {//对包进行分析和管理，后续再封装吧，现在先这里测试
-        //接收到包之后，首先检查它的
+    private void handleReceivedAudioInfo(Conference_info INFO) throws IOException {//对包进行分析和管理，后续再封装吧，现在先这里测试
+        int ACTION = INFO.getActionType();
+        switch (ACTION) {
+            case 1 -> {
+                ArrayList<String> NewConferenceUser = new ArrayList<>();
+                NewConferenceUser.add(INFO.getFromUser());
+                ConferenceOnlineUsersMap.put(INFO.getConferenceId(), NewConferenceUser);
+                //给发送方返回一个创建成功的消息
+                INFO.setActionType(11);
+                INFO.setSuccess(true);
+                Send2Users_UDP(INFO,INFO.getFromUser());
+            }
+            case 2 -> {
+                ArrayList<String> ConferenceUser = ConferenceOnlineUsersMap.get(INFO.getConferenceId());
+                ConferenceUser.add(INFO.getFromUser());
+                ConferenceOnlineUsersMap.put(INFO.getConferenceId(), ConferenceUser);
+                //返回加入成功
+                INFO.setActionType(12);
+                INFO.setSuccess(true);
+                Send2Users_UDP(INFO,INFO.getFromUser());
+            }
+            case 3 -> {
+                ArrayList<String> ConferenceUser = ConferenceOnlineUsersMap.get(INFO.getConferenceId());
+                ConferenceUser.remove(INFO.getFromUser());
+                ConferenceOnlineUsersMap.put(INFO.getConferenceId(), ConferenceUser);
+                //返回退出成功
+                INFO.setActionType(13);
+                INFO.setSuccess(true);
+                Send2Users_UDP(INFO,INFO.getFromUser());
+            }
+            case 4 -> {//收到消息了要转发
+                ArrayList<String> ConferenceUser = ConferenceOnlineUsersMap.get(INFO.getConferenceId());
+                Send2Users_UDP(INFO,ConferenceUser);
+                INFO.setActionType(14);
+                INFO.setSuccess(true);
+                Send2Users_UDP(INFO,INFO.getFromUser());
+            }
+            default -> {//出现异常了，收到了不存在的包
+                ServerFrame.appendLog("UDP Audio Server unknown action: " + ACTION);
+                //报错，鲁棒性处理
+                INFO.setSuccess(false);
+                Send2Users_UDP(INFO,INFO.getFromUser());
+            }
+        }
+    }
+
+    public void Send2Users_UDP(Conference_info INFO, ArrayList<String> to_user) throws IOException {//这个后续丢到model里面，先放这里
+        DatagramSocket tempSocket = this.audioSocket;
+        FileIO fileio = new FileIO();
+        for(int i = 0;i<to_user.size();i++) {
+            InetAddress ip = InetAddress.getByName(fileio.getUserIP(to_user.get(i)));
+            UdpIO.sendObject(tempSocket,INFO,ip);
+        }
+    }
+    public void Send2Users_UDP(Conference_info INFO, String to_user) throws IOException {//这个后续丢到model里面，先放这里
+        DatagramSocket tempSocket = this.audioSocket;
+        FileIO fileio = new FileIO();
+        InetAddress ip = InetAddress.getByName(fileio.getUserIP(to_user));
+        UdpIO.sendObject(tempSocket,INFO,ip);
     }
 }
