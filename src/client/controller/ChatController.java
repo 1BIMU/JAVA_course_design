@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.io.File;
 
 import client.MessageSender;
 import client.model.ClientModel;
@@ -455,5 +456,63 @@ public class ChatController {
      */
     public interface HistoryCallback {
         void onHistoryLoaded(List<String> history);
+    }
+    
+    /**
+     * 发送私聊文件
+     * @param fromUser 发送者用户名
+     * @param toUser 接收者用户名
+     * @param file 要发送的文件
+     * @param description 文件描述
+     * @return 是否发送成功
+     */
+    public boolean sendPrivateFile(String fromUser, String toUser, File file, String description) {
+        // 输入验证
+        if (file == null || !file.exists() || !file.isFile()) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("文件不存在或无效");
+            }
+            return false;
+        }
+        
+        // 使用MessageSender发送文件
+        boolean success = messageSender.sendPrivateFile(fromUser, toUser, file, description);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("发送文件失败，请检查网络连接");
+            }
+        }
+        
+        return success;
+    }
+    
+    /**
+     * 发送群聊文件
+     * @param fromUser 发送者用户名
+     * @param groupId 群组ID
+     * @param file 要发送的文件
+     * @param description 文件描述
+     * @return 是否发送成功
+     */
+    public boolean sendGroupFile(String fromUser, int groupId, File file, String description) {
+        // 输入验证
+        if (file == null || !file.exists() || !file.isFile()) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("文件不存在或无效");
+            }
+            return false;
+        }
+        
+        // 使用MessageSender发送文件
+        boolean success = messageSender.sendGroupFile(fromUser, groupId, file, description);
+        
+        if (!success) {
+            for (ChatView chatView : chatViews.values()) {
+                chatView.showError("发送群文件失败，请检查网络连接");
+            }
+        }
+        
+        return success;
     }
 } 

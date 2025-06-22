@@ -9,6 +9,8 @@ import client.controller.LoginController;
 import client.handler.ClientMessageHandler;
 import client.handler.ClientMessageHandlerFactory;
 import client.model.ClientModel;
+import info.Chat_info;
+import info.File_info;
 import info.encap_info;
 import io.IOStream;
 
@@ -41,6 +43,9 @@ public class MessageListener extends Thread {
     private boolean running; // 运行标志位
     private ClientMessageHandlerFactory handlerFactory; // 消息处理器工厂
     private MessageSender messageSender; // 消息发送器，用于重连
+    
+    // 静态引用，用于处理自己发送的文件消息
+    private static MessageListener instance;
 
     /*
         构造函数
@@ -54,6 +59,7 @@ public class MessageListener extends Thread {
         this.chatController = chatController; // 聊天控制器
         this.running = true;   // 运行标志位
         this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController);
+        instance = this; // 保存实例引用
     }
     
     /**
@@ -178,5 +184,28 @@ public class MessageListener extends Thread {
      */
     public void updateSocket(Socket socket) {
         this.socket = socket;
+    }
+    
+    /**
+     * 处理自己发送的文件消息
+     * @param fileInfo 文件信息
+     * @param chatInfo 聊天信息
+     */
+    public static void notifyFileMessage(File_info fileInfo, Chat_info chatInfo) {
+        if (instance != null && instance.chatController != null) {
+            // 将文件消息添加到聊天记录
+            instance.chatController.onNewMessage(chatInfo);
+            
+            // 创建一个封装信息，传递给文件消息处理器
+            encap_info info = new encap_info();
+            info.set_type(7); // 7代表文件传输消息
+            info.set_file_info(fileInfo);
+            
+            // 获取文件消息处理器并处理
+            ClientMessageHandler handler = instance.handlerFactory.getHandler(7);
+            if (handler != null) {
+                handler.handle(info);
+            }
+        }
     }
 }

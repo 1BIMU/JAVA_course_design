@@ -28,6 +28,7 @@ public class MessageHandlerFactory {
         handlers.put(4, new ChatMessageHandler(controller, server, serverWindow, currentUser));
         handlers.put(5, new RegisterMessageHandler(controller, server, serverWindow));
         handlers.put(6, new OrganizationMessageHandler(controller,server,serverWindow,currentUser));
+        handlers.put(7, new FileMessageHandler(controller, server, serverWindow, currentUser));
     }
     
     /**
@@ -48,5 +49,6 @@ public class MessageHandlerFactory {
         ((GroupMessageHandler)handlers.get(1)).setCurrentUser(currentUser);
         ((LogoutMessageHandler)handlers.get(2)).setCurrentUser(currentUser);
         ((ChatMessageHandler)handlers.get(4)).setCurrentUser(currentUser);
+        ((FileMessageHandler)handlers.get(7)).setCurrentUser(currentUser);
     }
 } 

@@ -6,14 +6,20 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.io.File;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -24,8 +30,11 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 
 import client.controller.ChatController;
+import client.handler.FileMessageHandler;
 import client.model.ClientModel;
 import client.model.ClientModel.ModelObserver;
 import client.model.ClientModel.UpdateType;
@@ -45,6 +54,7 @@ public class ChatView extends JFrame implements ModelObserver {
     private JTextArea messageDisplay;
     private JTextField messageInput;
     private JButton sendButton;
+    private JButton sendFileButton; // 新增发送文件按钮
     private JLabel statusLabel;
 
     // 聊天信息
@@ -54,6 +64,9 @@ public class ChatView extends JFrame implements ModelObserver {
 
     // 日期格式化
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    
+    // 文件下载链接正则表达式
+    private final Pattern filePattern = Pattern.compile("\\[点击此处下载文件: ([0-9a-f-]+)\\]");
 
     /**
      * 构造函数 - 用于单独的聊天窗口
@@ -152,6 +165,14 @@ public class ChatView extends JFrame implements ModelObserver {
         messageDisplay.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         JScrollPane messageScrollPane = new JScrollPane(messageDisplay);
         messageScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        
+        // 添加鼠标点击事件，处理文件下载链接
+        messageDisplay.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                handleFileDownloadClick(e);
+            }
+        });
 
         // 创建消息输入区域
         messageInput = new JTextField();
@@ -162,10 +183,19 @@ public class ChatView extends JFrame implements ModelObserver {
         sendButton = new JButton("发送");
         sendButton.addActionListener(e -> sendMessage());
 
+        // 创建发送文件按钮
+        sendFileButton = new JButton("发送文件");
+        sendFileButton.addActionListener(e -> sendFile());
+
+        // 创建按钮面板
+        JPanel buttonPanel = new JPanel(new BorderLayout(5, 0));
+        buttonPanel.add(sendButton, BorderLayout.WEST);
+        buttonPanel.add(sendFileButton, BorderLayout.EAST);
+
         // 创建输入面板
         JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
         inputPanel.add(messageInput, BorderLayout.CENTER);
-        inputPanel.add(sendButton, BorderLayout.EAST);
+        inputPanel.add(buttonPanel, BorderLayout.EAST);
 
         // 组装面板
         panel.add(titlePanel, BorderLayout.NORTH);
@@ -173,6 +203,47 @@ public class ChatView extends JFrame implements ModelObserver {
         panel.add(inputPanel, BorderLayout.SOUTH);
 
         return panel;
+    }
+    
+    /**
+     * 处理文件下载链接点击
+     * @param e 鼠标事件
+     */
+    private void handleFileDownloadClick(MouseEvent e) {
+        try {
+            int offset = messageDisplay.viewToModel(e.getPoint());
+            Document doc = messageDisplay.getDocument();
+            
+            // 获取当前行的文本
+            int lineStart = 0;
+            int lineEnd = doc.getLength();
+            for (int i = offset; i >= 0; i--) {
+                if (doc.getText(i, 1).equals("\n")) {
+                    lineStart = i + 1;
+                    break;
+                }
+            }
+            for (int i = offset; i < doc.getLength(); i++) {
+                if (doc.getText(i, 1).equals("\n")) {
+                    lineEnd = i;
+                    break;
+                }
+            }
+            
+            String line = doc.getText(lineStart, lineEnd - lineStart);
+            
+            // 检查是否包含文件下载链接
+            Matcher matcher = filePattern.matcher(line);
+            if (matcher.find()) {
+                String fileId = matcher.group(1);
+                System.out.println("点击了文件下载链接: " + fileId);
+                
+                // 下载文件
+                FileMessageHandler.downloadFile(fileId);
+            }
+        } catch (BadLocationException ex) {
+            ex.printStackTrace();
+        }
     }
 
     /**
@@ -194,6 +265,50 @@ public class ChatView extends JFrame implements ModelObserver {
         
         // 只清空输入框，不显示消息
         clearMessageInput();
+    }
+    
+    /**
+     * 发送文件
+     */
+    private void sendFile() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("选择要发送的文件");
+        
+        int result = fileChooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            
+            // 检查文件大小
+            if (selectedFile.length() > 10 * 1024 * 1024) { // 限制文件大小为10MB
+                showError("文件过大，请选择小于10MB的文件");
+                return;
+            }
+            
+            // 询问文件描述
+            String description = JOptionPane.showInputDialog(this, "请输入文件描述（可选）:", "文件描述", JOptionPane.QUESTION_MESSAGE);
+            
+            // 发送文件
+            boolean success;
+            String currentUser = controller.getCurrentUsername();
+            
+            if (isGroupChat) {
+                try {
+                    int groupId = Integer.parseInt(targetId);
+                    success = controller.sendGroupFile(currentUser, groupId, selectedFile, description);
+                } catch (NumberFormatException e) {
+                    showError("群组ID格式错误");
+                    return;
+                }
+            } else {
+                success = controller.sendPrivateFile(currentUser, targetId, selectedFile, description);
+            }
+            
+            if (success) {
+                showMessage("文件发送请求已提交");
+            } else {
+                showError("文件发送失败，请检查网络连接");
+            }
+        }
     }
 
     /**

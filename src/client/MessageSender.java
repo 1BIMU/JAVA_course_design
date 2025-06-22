@@ -7,6 +7,11 @@ import info.*;
 import io.IOStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
 
 /*
     消息发送器，负责向服务器发送各类消息
@@ -16,6 +21,8 @@ public class MessageSender {
     private String host;
     private int port;
     private boolean reconnecting = false;
+    // 存储已发送文件的缓存，用于后续下载
+    private static Map<String, byte[]> fileDataCache = new HashMap<>();
     
     /*
         构造函数
@@ -28,6 +35,15 @@ public class MessageSender {
         } catch (Exception e) {
             System.err.println("获取Socket地址和端口失败: " + e.getMessage());
         }
+    }
+    
+    /**
+     * 获取文件数据
+     * @param fileId 文件ID
+     * @return 文件数据
+     */
+    public static byte[] getFileData(String fileId) {
+        return fileDataCache.get(fileId);
     }
     
     /**
@@ -232,5 +248,184 @@ public class MessageSender {
         } catch (Exception e) {
             System.err.println("获取Socket地址和端口失败: " + e.getMessage());
         }
+    }
+    
+    /**
+     * 发送文件（私聊）
+     * @param fromUser 发送者用户名
+     * @param toUser 接收者用户名
+     * @param file 要发送的文件
+     * @param description 文件描述
+     * @return 是否发送成功
+     */
+    public boolean sendPrivateFile(String fromUser, String toUser, File file, String description) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        try {
+            // 读取文件数据
+            byte[] fileData = readFileData(file);
+            
+            // 生成唯一文件ID
+            String fileId = UUID.randomUUID().toString();
+            
+            // 将文件数据缓存起来，以便后续下载
+            fileDataCache.put(fileId, fileData);
+            
+            // 创建文件信息对象（发送给接收方的，包含文件数据）
+            File_info fileInfo = new File_info();
+            fileInfo.setFileName(file.getName());
+            fileInfo.setFileData(fileData);
+            fileInfo.setFileSize(file.length());
+            fileInfo.setFromUsername(fromUser);
+            fileInfo.setToUsername(toUser);
+            fileInfo.setGroupFile(false);
+            fileInfo.setFileDescription(description);
+            fileInfo.setFileId(fileId);
+            
+            // 封装信息
+            encap_info info = new encap_info();
+            info.set_type(7); // 7代表文件传输消息
+            info.set_file_info(fileInfo);
+            
+            // 发送给接收方
+            boolean success = IOStream.writeMessage(socket, info);
+            
+            // 创建一个只包含文件信息的副本，发送给自己（用于显示在自己的聊天窗口中）
+            if (success) {
+                // 创建只包含文件信息的对象（不包含文件数据）
+                File_info selfInfo = new File_info();
+                selfInfo.setFileName(file.getName());
+                selfInfo.setFileSize(file.length());
+                selfInfo.setFromUsername(fromUser);
+                selfInfo.setToUsername(toUser);
+                selfInfo.setGroupFile(false);
+                selfInfo.setFileDescription(description);
+                selfInfo.setFileId(fileId);
+                selfInfo.setInfoOnly(true); // 标记为只包含信息
+                
+                // 创建聊天信息对象
+                Chat_info chatInfo = new Chat_info();
+                chatInfo.setType(false); // 私聊
+                chatInfo.setFrom_username(fromUser);
+                chatInfo.setTo_username(toUser);
+                chatInfo.setText("[文件] " + file.getName() + " (" + formatFileSize(file.length()) + ")");
+                chatInfo.setTransfer_status(true);
+                
+                // 通知客户端模型更新
+                MessageListener.notifyFileMessage(selfInfo, chatInfo);
+            }
+            
+            return success;
+        } catch (IOException e) {
+            System.err.println("发送文件失败: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 发送群文件
+     * @param fromUser 发送者用户名
+     * @param groupId 群组ID
+     * @param file 要发送的文件
+     * @param description 文件描述
+     * @return 是否发送成功
+     */
+    public boolean sendGroupFile(String fromUser, int groupId, File file, String description) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        try {
+            // 读取文件数据
+            byte[] fileData = readFileData(file);
+            
+            // 生成唯一文件ID
+            String fileId = UUID.randomUUID().toString();
+            
+            // 将文件数据缓存起来，以便后续下载
+            fileDataCache.put(fileId, fileData);
+            
+            // 创建文件信息对象（发送给群组成员的，包含文件数据）
+            File_info fileInfo = new File_info();
+            fileInfo.setFileName(file.getName());
+            fileInfo.setFileData(fileData);
+            fileInfo.setFileSize(file.length());
+            fileInfo.setFromUsername(fromUser);
+            fileInfo.setGroupId(groupId);
+            fileInfo.setGroupFile(true);
+            fileInfo.setFileDescription(description);
+            fileInfo.setFileId(fileId);
+            
+            // 封装信息
+            encap_info info = new encap_info();
+            info.set_type(7); // 7代表文件传输消息
+            info.set_file_info(fileInfo);
+            
+            // 发送给群组
+            boolean success = IOStream.writeMessage(socket, info);
+            
+            // 创建一个只包含文件信息的副本，发送给自己（用于显示在自己的聊天窗口中）
+            if (success) {
+                // 创建只包含文件信息的对象（不包含文件数据）
+                File_info selfInfo = new File_info();
+                selfInfo.setFileName(file.getName());
+                selfInfo.setFileSize(file.length());
+                selfInfo.setFromUsername(fromUser);
+                selfInfo.setGroupId(groupId);
+                selfInfo.setGroupFile(true);
+                selfInfo.setFileDescription(description);
+                selfInfo.setFileId(fileId);
+                selfInfo.setInfoOnly(true); // 标记为只包含信息
+                
+                // 创建聊天信息对象
+                Chat_info chatInfo = new Chat_info();
+                chatInfo.setType(true); // 群聊
+                chatInfo.setFrom_username(fromUser);
+                chatInfo.setGroup_id(groupId);
+                chatInfo.setText("[文件] " + file.getName() + " (" + formatFileSize(file.length()) + ")");
+                chatInfo.setTransfer_status(true);
+                
+                // 通知客户端模型更新
+                MessageListener.notifyFileMessage(selfInfo, chatInfo);
+            }
+            
+            return success;
+        } catch (IOException e) {
+            System.err.println("发送群文件失败: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 格式化文件大小
+     * @param size 文件大小（字节）
+     * @return 格式化后的文件大小字符串
+     */
+    private String formatFileSize(long size) {
+        if (size < 1024) {
+            return size + " B";
+        } else if (size < 1024 * 1024) {
+            return String.format("%.2f KB", size / 1024.0);
+        } else if (size < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", size / (1024.0 * 1024));
+        } else {
+            return String.format("%.2f GB", size / (1024.0 * 1024 * 1024));
+        }
+    }
+    
+    /**
+     * 读取文件数据
+     * @param file 要读取的文件
+     * @return 文件字节数组
+     * @throws IOException 如果读取文件出错
+     */
+    private byte[] readFileData(File file) throws IOException {
+        byte[] fileData = new byte[(int) file.length()];
+        try (FileInputStream fis = new FileInputStream(file)) {
+            fis.read(fileData);
+        }
+        return fileData;
     }
 }

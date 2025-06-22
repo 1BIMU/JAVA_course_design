@@ -26,6 +26,7 @@ public class ClientMessageHandlerFactory {
         handlers.put(3, new LoginMessageHandler(model, loginController));
         handlers.put(4, new ChatMessageHandler(model, chatController));
         handlers.put(5, new RegisterMessageHandler(loginController));
+        handlers.put(7, new FileMessageHandler(model, chatController));
     }
     
     /**
