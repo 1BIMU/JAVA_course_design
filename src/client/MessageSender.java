@@ -40,11 +40,13 @@ public class MessageSender {
     */
     public MessageSender(Socket socket) {
         this.socket = socket;
-        try {
-            this.host = socket.getInetAddress().getHostAddress();
-            this.port = socket.getPort();
-        } catch (Exception e) {
-            System.err.println("获取Socket地址和端口失败: " + e.getMessage());
+        if (socket != null) {
+            try {
+                this.host = socket.getInetAddress().getHostAddress();
+                this.port = socket.getPort();
+            } catch (Exception e) {
+                System.err.println("获取Socket地址和端口失败: " + e.getMessage());
+            }
         }
     }
     
@@ -262,11 +264,17 @@ public class MessageSender {
      */
     public void setSocket(Socket socket) {
         this.socket = socket;
-        try {
-            this.host = socket.getInetAddress().getHostAddress();
-            this.port = socket.getPort();
-        } catch (Exception e) {
-            System.err.println("获取Socket地址和端口失败: " + e.getMessage());
+        if (socket != null) {
+            try {
+                this.host = socket.getInetAddress().getHostAddress();
+                this.port = socket.getPort();
+            } catch (Exception e) {
+                System.err.println("获取Socket地址和端口失败: " + e.getMessage());
+            }
+        } else {
+            // 如果socket为null，清除host和port
+            this.host = null;
+            this.port = 0;
         }
     }
     

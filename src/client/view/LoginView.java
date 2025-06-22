@@ -72,6 +72,8 @@ public class LoginView extends JFrame {
     private JButton loginButton;
     private JButton switchToRegisterButton;
     private JLabel statusLabel;
+    private JTextField serverField;
+    private JTextField portField;
     
     // 注册面板组件
     private JPanel registerPanel;
@@ -158,27 +160,52 @@ public class LoginView extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(5, 5, 5, 5);
         
-        // 用户名
+        // 服务器地址
         gbc.gridx = 0;
         gbc.gridy = 0;
+        JLabel serverLabel = new JLabel("服务器地址:");
+        formPanel.add(serverLabel, gbc);
+        
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        serverField = new JTextField("localhost", 20);
+        formPanel.add(serverField, gbc);
+        
+        // 端口号
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0;
+        JLabel portLabel = new JLabel("端口号:");
+        formPanel.add(portLabel, gbc);
+        
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.weightx = 1.0;
+        portField = new JTextField("8888", 20);
+        formPanel.add(portField, gbc);
+        
+        // 用户名
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         JLabel userLabel = new JLabel("用户名:");
         formPanel.add(userLabel, gbc);
         
         gbc.gridx = 1;
-        gbc.gridy = 0;
+        gbc.gridy = 2;
         gbc.weightx = 1.0;
         usernameField = new JTextField(20);
         formPanel.add(usernameField, gbc);
         
         // 密码
         gbc.gridx = 0;
-        gbc.gridy = 1;
+        gbc.gridy = 3;
         gbc.weightx = 0;
         JLabel passLabel = new JLabel("密码:");
         formPanel.add(passLabel, gbc);
         
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 3;
         gbc.weightx = 1.0;
         passwordField = new JPasswordField(20);
         formPanel.add(passwordField, gbc);
@@ -192,7 +219,28 @@ public class LoginView extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 // 调用控制器处理登录
-                controller.login(usernameField.getText(), new String(passwordField.getPassword()));
+                String server = serverField.getText().trim();
+                String portStr = portField.getText().trim();
+                
+                // 验证服务器地址和端口号
+                if (server.isEmpty()) {
+                    showError("请输入服务器地址");
+                    return;
+                }
+                
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                    if (port <= 0 || port > 65535) {
+                        showError("端口号必须在1-65535之间");
+                        return;
+                    }
+                } catch (NumberFormatException ex) {
+                    showError("请输入有效的端口号");
+                    return;
+                }
+                
+                controller.login(server, port, usernameField.getText(), new String(passwordField.getPassword()));
             }
         });
         buttonPanel.add(loginButton);
@@ -243,40 +291,65 @@ public class LoginView extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(5, 5, 5, 5);
         
-        // 用户名
+        // 服务器地址
         gbc.gridx = 0;
         gbc.gridy = 0;
+        JLabel serverLabel = new JLabel("服务器地址:");
+        formPanel.add(serverLabel, gbc);
+        
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        JTextField regServerField = new JTextField("localhost", 20);
+        formPanel.add(regServerField, gbc);
+        
+        // 端口号
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0;
+        JLabel portLabel = new JLabel("端口号:");
+        formPanel.add(portLabel, gbc);
+        
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.weightx = 1.0;
+        JTextField regPortField = new JTextField("8888", 20);
+        formPanel.add(regPortField, gbc);
+        
+        // 用户名
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         JLabel userLabel = new JLabel("用户名:");
         formPanel.add(userLabel, gbc);
         
         gbc.gridx = 1;
-        gbc.gridy = 0;
+        gbc.gridy = 2;
         gbc.weightx = 1.0;
         regUsernameField = new JTextField(20);
         formPanel.add(regUsernameField, gbc);
         
         // 密码
         gbc.gridx = 0;
-        gbc.gridy = 1;
+        gbc.gridy = 3;
         gbc.weightx = 0;
         JLabel passLabel = new JLabel("密码:");
         formPanel.add(passLabel, gbc);
         
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 3;
         gbc.weightx = 1.0;
         regPasswordField = new JPasswordField(20);
         formPanel.add(regPasswordField, gbc);
         
         // 确认密码
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 4;
         gbc.weightx = 0;
-        JLabel confirmLabel = new JLabel("确认密码:");
-        formPanel.add(confirmLabel, gbc);
+        JLabel confirmPassLabel = new JLabel("确认密码:");
+        formPanel.add(confirmPassLabel, gbc);
         
         gbc.gridx = 1;
-        gbc.gridy = 2;
+        gbc.gridy = 4;
         gbc.weightx = 1.0;
         regConfirmPasswordField = new JPasswordField(20);
         formPanel.add(regConfirmPasswordField, gbc);
@@ -289,12 +362,32 @@ public class LoginView extends JFrame {
         registerButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                // 获取服务器地址和端口号
+                String server = regServerField.getText().trim();
+                String portStr = regPortField.getText().trim();
+                
+                // 验证服务器地址和端口号
+                if (server.isEmpty()) {
+                    showError("请输入服务器地址");
+                    return;
+                }
+                
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                    if (port <= 0 || port > 65535) {
+                        showError("端口号必须在1-65535之间");
+                        return;
+                    }
+                } catch (NumberFormatException ex) {
+                    showError("请输入有效的端口号");
+                    return;
+                }
+                
                 // 调用控制器处理注册
-                controller.register(
-                    regUsernameField.getText(),
-                    new String(regPasswordField.getPassword()),
-                    new String(regConfirmPasswordField.getPassword())
-                );
+                controller.register(server, port, regUsernameField.getText(), 
+                    new String(regPasswordField.getPassword()), 
+                    new String(regConfirmPasswordField.getPassword()));
             }
         });
         buttonPanel.add(registerButton);
@@ -318,11 +411,11 @@ public class LoginView extends JFrame {
         registerPanel.add(titlePanel, BorderLayout.NORTH);
         registerPanel.add(formPanel, BorderLayout.CENTER);
         
-        // 按钮面板 + 状态标签
+        // 按钮面板 + 状态面板
         JPanel southPanel = new JPanel(new BorderLayout());
         southPanel.add(buttonPanel, BorderLayout.CENTER);
         southPanel.add(regStatusLabel, BorderLayout.SOUTH);
-
+        
         registerPanel.add(southPanel, BorderLayout.SOUTH);
     }
     

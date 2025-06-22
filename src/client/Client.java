@@ -35,6 +35,15 @@ public class Client implements LoginCallback {
     */
     public Client() {
         this.model = new ClientModel();
+        
+        // 创建一个空的 MessageSender（不包含实际的 Socket 连接）
+        this.messageSender = new MessageSender(null);
+        
+        // 初始化控制器
+        this.loginController = new LoginController(model, messageSender);
+        this.loginController.setLoginCallback(this);
+        
+        this.chatController = new ChatController(model, messageSender);
     }
     
     /*
@@ -42,18 +51,22 @@ public class Client implements LoginCallback {
     */
     public boolean connectToServer(String host, int port) {
         try {
+            // 关闭之前的连接（如果有）
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+            
+            // 停止之前的消息监听线程（如果有）
+            if (messageListener != null) {
+                messageListener.stopListening();
+            }
+            
             // 创建Socket连接
             this.socket = new Socket(host, port);
             System.out.println("连接到服务器: " + host + ":" + port);
             
-            // 创建消息发送器
-            this.messageSender = new MessageSender(socket);
-            
-            // 初始化控制器，传入消息发送器而不是Socket
-            this.loginController = new LoginController(model, messageSender);
-            this.loginController.setLoginCallback(this);
-            
-            this.chatController = new ChatController(model, messageSender);
+            // 更新消息发送器的Socket连接
+            this.messageSender.setSocket(socket);
             
             // 启动消息监听线程
             this.messageListener = new MessageListener(socket, model, loginController, chatController);
@@ -114,38 +127,16 @@ public class Client implements LoginCallback {
         客户端启动入口
     */
     public static void main(String[] args) {
-        // 设置服务器地址和端口
-        String host = "127.0.0.1";
-        int port = 6688;
-        
-        // 从命令行参数获取服务器地址和端口
-        if (args.length >= 1) {
-            host = args[0];
-        }
-        if (args.length >= 2) {
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                System.err.println("端口号格式错误，使用默认端口6688");
-            }
-        }
-        
         // 创建并启动客户端
         Client client = new Client();
         
-        // 连接服务器
-        if (client.connectToServer(host, port)) {
-            // 添加关闭钩子，确保程序退出时释放资源
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                client.disconnect();
-            }));
-            
-            // 启动客户端
-            client.start();
-        } else {
-            System.err.println("无法连接到服务器，程序退出");
-            System.exit(1);
-        }
+        // 添加关闭钩子，确保程序退出时释放资源
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            client.disconnect();
+        }));
+        
+        // 启动客户端（显示登录界面）
+        client.start();
     }
     
     /* 一些说明：
@@ -158,6 +149,14 @@ public class Client implements LoginCallback {
     */
     @Override
     public void onLoginSuccess() {
+        // 确保 chatController 使用最新的 messageSender
+        this.chatController = new ChatController(model, messageSender);
+        
+        // 更新 MessageListener 中的 ChatController 引用
+        if (messageListener != null) {
+            messageListener.setChatController(chatController);
+        }
+        
         // 创建联系人列表视图
         contactListView = new ContactListView(chatController, model, model.getCurrentUser());
         
@@ -202,5 +201,12 @@ public class Client implements LoginCallback {
     public void start() {
         // 显示登录界面
         loginController.showLoginView();
+    }
+    
+    /*
+        设置消息监听器
+    */
+    public void setMessageListener(MessageListener messageListener) {
+        this.messageListener = messageListener;
     }
 } 

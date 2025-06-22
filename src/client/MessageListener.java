@@ -63,6 +63,16 @@ public class MessageListener extends Thread {
     }
     
     /**
+     * 更新聊天控制器引用
+     * @param chatController 新的聊天控制器
+     */
+    public void setChatController(ChatController chatController) {
+        this.chatController = chatController;
+        // 同时更新消息处理器工厂中的聊天控制器引用
+        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController);
+    }
+    
+    /**
      * 设置消息发送器，用于重连
      */
     public void setMessageSender(MessageSender messageSender) {
