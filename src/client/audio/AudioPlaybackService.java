@@ -104,6 +104,8 @@ public class AudioPlaybackService {
      */
     private void playAudioFromQueue() {
         byte[] buffer = new byte[4096]; // 4K 缓冲区
+        int totalBytesPlayed = 0;
+        int audioChunksPlayed = 0;
 
         try {
             while (running.get()) {
@@ -111,8 +113,51 @@ public class AudioPlaybackService {
                     // 从队列获取音频数据
                     byte[] audioData = audioDataQueue.take();
 
+                    // 添加日志记录播放的音频数据
+                    totalBytesPlayed += audioData.length;
+                    audioChunksPlayed++;
+                    
+                    if (audioChunksPlayed % 10 == 0) {  // 每10个音频块记录一次，避免日志过多
+                        System.out.println("正在播放音频数据: 大小=" + audioData.length + 
+                                          " 字节, 累计播放=" + totalBytesPlayed + 
+                                          " 字节, 块数=" + audioChunksPlayed);
+                    }
+
+                    // 检查线路状态，如果关闭则重新打开
+                    if (line == null || !line.isOpen() || !line.isActive()) {
+                        System.out.println("音频线路未打开或未激活，尝试重新打开");
+                        try {
+                            if (line != null) {
+                                line.close();
+                            }
+                            
+                            DataLine.Info info = new DataLine.Info(SourceDataLine.class, audioFormat);
+                            if (!AudioSystem.isLineSupported(info)) {
+                                throw new LineUnavailableException("不支持的音频格式: " + audioFormat);
+                            }
+                            
+                            line = (SourceDataLine) AudioSystem.getLine(info);
+                            line.open(audioFormat);
+                            line.start();
+                            System.out.println("音频线路重新打开成功");
+                        } catch (Exception e) {
+                            System.err.println("重新打开音频线路失败: " + e.getMessage());
+                            e.printStackTrace();
+                            continue; // 跳过这个音频数据
+                        }
+                    }
+
                     // 播放音频数据
-                    line.write(audioData, 0, audioData.length);
+                    try {
+                        int written = line.write(audioData, 0, audioData.length);
+                        if (written != audioData.length) {
+                            System.out.println("警告: 写入的音频数据不完整，预期=" + audioData.length + 
+                                              ", 实际写入=" + written);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("播放音频数据时出错: " + e.getMessage());
+                        e.printStackTrace();
+                    }
 
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -120,6 +165,7 @@ public class AudioPlaybackService {
                 }
             }
         } catch (Exception e) {
+            System.err.println("音频播放出错: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -152,8 +198,19 @@ public class AudioPlaybackService {
         if (running.get() && audioData != null && audioData.length > 0) {
             // 检查通话是否处于活动状态
             if (activeCallMap.containsKey(callId)) {
+                // 添加日志记录收到的音频数据
+                System.out.println("音频数据入队: 通话ID=" + callId + 
+                                  ", 数据大小=" + audioData.length + 
+                                  " 字节, 队列大小=" + audioDataQueue.size());
+                
                 audioDataQueue.offer(audioData.clone()); // 克隆数据，避免外部修改
+            } else {
+                System.out.println("丢弃音频数据: 通话ID=" + callId + " 不在活动状态");
             }
+        } else if (!running.get()) {
+            System.out.println("丢弃音频数据: 播放服务未运行");
+        } else if (audioData == null || audioData.length == 0) {
+            System.out.println("丢弃音频数据: 数据为空或长度为0");
         }
     }
 

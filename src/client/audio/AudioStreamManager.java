@@ -62,6 +62,26 @@ public class AudioStreamManager {
         if (socket == null || socket.isClosed()) {
             socket = new DatagramSocket(localPort);
             socket.setSoTimeout(100); // 设置超时，以便能及时关闭
+            
+            // 增加配置以提高可靠性
+            try {
+                // 允许广播
+                socket.setBroadcast(true);
+                
+                // 设置更大的发送和接收缓冲区
+                socket.setReceiveBufferSize(65536); // 64KB
+                socket.setSendBufferSize(65536); // 64KB
+                
+                // 设置性能选项
+                socket.setTrafficClass(0x10); // 低延迟
+                
+                System.out.println("UDP Socket配置: " +
+                                  "本地端口=" + localPort + 
+                                  ", 接收缓冲区=" + socket.getReceiveBufferSize() + 
+                                  ", 发送缓冲区=" + socket.getSendBufferSize());
+            } catch (Exception e) {
+                System.err.println("设置Socket选项失败，但将继续使用: " + e.getMessage());
+            }
         }
     }
 
@@ -201,15 +221,32 @@ public class AudioStreamManager {
         }
 
         receiving.set(true);
+        System.out.println("开始接收音频数据: 本地端口=" + localPort);
 
         executorService.submit(() -> {
             try {
                 byte[] buffer = new byte[BUFFER_SIZE];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                int packetsReceived = 0;
+                int totalBytesReceived = 0;
+                long startTime = System.currentTimeMillis();
 
                 while (receiving.get()) {
                     try {
                         socket.receive(packet);
+                        
+                        // 记录接收到的数据包
+                        packetsReceived++;
+                        totalBytesReceived += packet.getLength();
+                        
+                        // 每接收10个包或每5秒记录一次统计信息
+                        if (packetsReceived % 10 == 0 || System.currentTimeMillis() - startTime > 5000) {
+                            System.out.println("UDP接收统计: 收到包数=" + packetsReceived + 
+                                              ", 总字节数=" + totalBytesReceived +
+                                              ", 来源=" + packet.getAddress().getHostAddress() + 
+                                              ":" + packet.getPort());
+                            startTime = System.currentTimeMillis();
+                        }
 
                         // 创建数据副本
                         byte[] audioData = Arrays.copyOf(packet.getData(), packet.getLength());
@@ -226,11 +263,13 @@ public class AudioStreamManager {
                         // 超时，继续循环
                     } catch (Exception e) {
                         if (receiving.get()) {
+                            System.err.println("接收音频数据时出错: " + e.getMessage());
                             e.printStackTrace();
                         }
                     }
                 }
             } catch (Exception e) {
+                System.err.println("音频接收线程出错: " + e.getMessage());
                 e.printStackTrace();
             }
         });
