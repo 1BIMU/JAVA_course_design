@@ -12,6 +12,11 @@ import java.io.FileInputStream;
 import java.util.UUID;
 import java.util.HashMap;
 import java.util.Map;
+import javax.swing.ImageIcon;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.awt.Image;
+import java.awt.Graphics2D;
 
 /*
     消息发送器，负责向服务器发送各类消息
@@ -23,6 +28,12 @@ public class MessageSender {
     private boolean reconnecting = false;
     // 存储已发送文件的缓存，用于后续下载
     private static Map<String, byte[]> fileDataCache = new HashMap<>();
+    // 存储已发送图片的缓存，用于显示
+    private static Map<String, ImageIcon> imageCache = new HashMap<>();
+    
+    // 图片最大尺寸（用于预览）
+    private static final int MAX_IMAGE_WIDTH = 300;
+    private static final int MAX_IMAGE_HEIGHT = 300;
     
     /*
         构造函数
@@ -44,6 +55,15 @@ public class MessageSender {
      */
     public static byte[] getFileData(String fileId) {
         return fileDataCache.get(fileId);
+    }
+    
+    /**
+     * 获取图片缩略图
+     * @param fileId 文件ID
+     * @return 图片缩略图
+     */
+    public static ImageIcon getImageIcon(String fileId) {
+        return imageCache.get(fileId);
     }
     
     /**
@@ -427,5 +447,219 @@ public class MessageSender {
             fis.read(fileData);
         }
         return fileData;
+    }
+    
+    /**
+     * 发送私聊图片
+     * @param fromUser 发送者用户名
+     * @param toUser 接收者用户名
+     * @param imageFile 图片文件
+     * @param description 图片描述
+     * @return 是否发送成功
+     */
+    public boolean sendPrivateImage(String fromUser, String toUser, File imageFile, String description) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        try {
+            // 检查是否为图片文件
+            if (!File_info.checkIsImage(imageFile.getName())) {
+                System.err.println("不是有效的图片文件: " + imageFile.getName());
+                return false;
+            }
+            
+            // 读取文件数据
+            byte[] fileData = readFileData(imageFile);
+            
+            // 生成唯一文件ID
+            String fileId = UUID.randomUUID().toString();
+            
+            // 将文件数据缓存起来，以便后续下载
+            fileDataCache.put(fileId, fileData);
+            
+            // 创建图片缩略图并缓存
+            try {
+                BufferedImage originalImage = ImageIO.read(imageFile);
+                if (originalImage != null) {
+                    ImageIcon thumbnail = createThumbnail(originalImage);
+                    imageCache.put(fileId, thumbnail);
+                }
+            } catch (Exception e) {
+                System.err.println("创建图片缩略图失败: " + e.getMessage());
+            }
+            
+            // 创建文件信息对象（发送给接收方的，包含文件数据）
+            File_info fileInfo = new File_info();
+            fileInfo.setFileName(imageFile.getName());
+            fileInfo.setFileData(fileData);
+            fileInfo.setFileSize(imageFile.length());
+            fileInfo.setFromUsername(fromUser);
+            fileInfo.setToUsername(toUser);
+            fileInfo.setGroupFile(false);
+            fileInfo.setFileDescription(description);
+            fileInfo.setFileId(fileId);
+            // 图片类型会在setFileName中自动设置
+            
+            // 封装信息
+            encap_info info = new encap_info();
+            info.set_type(7); // 7代表文件传输消息
+            info.set_file_info(fileInfo);
+            
+            // 发送给接收方
+            boolean success = IOStream.writeMessage(socket, info);
+            
+            // 创建一个只包含文件信息的副本，发送给自己（用于显示在自己的聊天窗口中）
+            if (success) {
+                // 创建只包含文件信息的对象（不包含文件数据）
+                File_info selfInfo = new File_info();
+                selfInfo.setFileName(imageFile.getName());
+                selfInfo.setFileSize(imageFile.length());
+                selfInfo.setFromUsername(fromUser);
+                selfInfo.setToUsername(toUser);
+                selfInfo.setGroupFile(false);
+                selfInfo.setFileDescription(description);
+                selfInfo.setFileId(fileId);
+                selfInfo.setInfoOnly(true); // 标记为只包含信息
+                
+                // 创建聊天信息对象
+                Chat_info chatInfo = new Chat_info();
+                chatInfo.setType(false); // 私聊
+                chatInfo.setFrom_username(fromUser);
+                chatInfo.setTo_username(toUser);
+                chatInfo.setText("[图片] " + imageFile.getName());
+                chatInfo.setTransfer_status(true);
+                
+                // 通知客户端模型更新
+                MessageListener.notifyFileMessage(selfInfo, chatInfo);
+            }
+            
+            return success;
+        } catch (IOException e) {
+            System.err.println("发送图片失败: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 发送群聊图片
+     * @param fromUser 发送者用户名
+     * @param groupId 群组ID
+     * @param imageFile 图片文件
+     * @param description 图片描述
+     * @return 是否发送成功
+     */
+    public boolean sendGroupImage(String fromUser, int groupId, File imageFile, String description) {
+        if (!ensureConnected()) {
+            return false;
+        }
+        
+        try {
+            // 检查是否为图片文件
+            if (!File_info.checkIsImage(imageFile.getName())) {
+                System.err.println("不是有效的图片文件: " + imageFile.getName());
+                return false;
+            }
+            
+            // 读取文件数据
+            byte[] fileData = readFileData(imageFile);
+            
+            // 生成唯一文件ID
+            String fileId = UUID.randomUUID().toString();
+            
+            // 将文件数据缓存起来，以便后续下载
+            fileDataCache.put(fileId, fileData);
+            
+            // 创建图片缩略图并缓存
+            try {
+                BufferedImage originalImage = ImageIO.read(imageFile);
+                if (originalImage != null) {
+                    ImageIcon thumbnail = createThumbnail(originalImage);
+                    imageCache.put(fileId, thumbnail);
+                }
+            } catch (Exception e) {
+                System.err.println("创建图片缩略图失败: " + e.getMessage());
+            }
+            
+            // 创建文件信息对象（发送给群组成员的，包含文件数据）
+            File_info fileInfo = new File_info();
+            fileInfo.setFileName(imageFile.getName());
+            fileInfo.setFileData(fileData);
+            fileInfo.setFileSize(imageFile.length());
+            fileInfo.setFromUsername(fromUser);
+            fileInfo.setGroupId(groupId);
+            fileInfo.setGroupFile(true);
+            fileInfo.setFileDescription(description);
+            fileInfo.setFileId(fileId);
+            // 图片类型会在setFileName中自动设置
+            
+            // 封装信息
+            encap_info info = new encap_info();
+            info.set_type(7); // 7代表文件传输消息
+            info.set_file_info(fileInfo);
+            
+            // 发送给群组
+            boolean success = IOStream.writeMessage(socket, info);
+            
+            // 创建一个只包含文件信息的副本，发送给自己（用于显示在自己的聊天窗口中）
+            if (success) {
+                // 创建只包含文件信息的对象（不包含文件数据）
+                File_info selfInfo = new File_info();
+                selfInfo.setFileName(imageFile.getName());
+                selfInfo.setFileSize(imageFile.length());
+                selfInfo.setFromUsername(fromUser);
+                selfInfo.setGroupId(groupId);
+                selfInfo.setGroupFile(true);
+                selfInfo.setFileDescription(description);
+                selfInfo.setFileId(fileId);
+                selfInfo.setInfoOnly(true); // 标记为只包含信息
+                
+                // 创建聊天信息对象
+                Chat_info chatInfo = new Chat_info();
+                chatInfo.setType(true); // 群聊
+                chatInfo.setFrom_username(fromUser);
+                chatInfo.setGroup_id(groupId);
+                chatInfo.setText("[图片] " + imageFile.getName());
+                chatInfo.setTransfer_status(true);
+                
+                // 通知客户端模型更新
+                MessageListener.notifyFileMessage(selfInfo, chatInfo);
+            }
+            
+            return success;
+        } catch (IOException e) {
+            System.err.println("发送群聊图片失败: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 创建图片缩略图
+     * @param originalImage 原始图片
+     * @return 缩略图
+     */
+    private ImageIcon createThumbnail(BufferedImage originalImage) {
+        int originalWidth = originalImage.getWidth();
+        int originalHeight = originalImage.getHeight();
+        
+        // 计算缩放比例
+        double scale = 1.0;
+        if (originalWidth > MAX_IMAGE_WIDTH || originalHeight > MAX_IMAGE_HEIGHT) {
+            double scaleWidth = (double) MAX_IMAGE_WIDTH / originalWidth;
+            double scaleHeight = (double) MAX_IMAGE_HEIGHT / originalHeight;
+            scale = Math.min(scaleWidth, scaleHeight);
+        }
+        
+        // 计算缩放后的尺寸
+        int scaledWidth = (int) (originalWidth * scale);
+        int scaledHeight = (int) (originalHeight * scale);
+        
+        // 创建缩略图
+        BufferedImage thumbnail = new BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = thumbnail.createGraphics();
+        g2d.drawImage(originalImage.getScaledInstance(scaledWidth, scaledHeight, Image.SCALE_SMOOTH), 0, 0, null);
+        g2d.dispose();
+        
+        return new ImageIcon(thumbnail);
     }
 }

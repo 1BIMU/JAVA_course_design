@@ -14,6 +14,9 @@ import client.view.ChatView;
 import info.Chat_info;
 import info.Group_info;
 import io.FileIO;
+import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 /*
     一些说明：通过视图中的接口与视图组件进行交互
@@ -514,5 +517,164 @@ public class ChatController {
         }
         
         return success;
+    }
+    
+    /**
+     * 发送私聊图片
+     * @param username 接收者用户名
+     */
+    public void sendPrivateImage(String username) {
+        if (username == null || username.isEmpty()) {
+            // 获取对应的聊天窗口
+            String key = getChatViewKey(false, username);
+            ChatView chatView = chatViews.get(key);
+            
+            if (chatView != null) {
+                chatView.showError("请先选择聊天对象");
+            }
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("选择要发送的图片");
+        // 设置文件过滤器，只显示图片文件
+        FileNameExtensionFilter filter = new FileNameExtensionFilter(
+            "图片文件", "jpg", "jpeg", "png", "gif", "bmp");
+        fileChooser.setFileFilter(filter);
+        
+        int result = fileChooser.showOpenDialog(null);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            
+            // 检查文件是否为图片
+            if (!selectedFile.exists() || !selectedFile.isFile()) {
+                // 获取对应的聊天窗口
+                String key = getChatViewKey(false, username);
+                ChatView chatView = chatViews.get(key);
+                
+                if (chatView != null) {
+                    chatView.showError("所选文件不存在或不是有效文件");
+                }
+                return;
+            }
+            
+            // 检查文件扩展名
+            String fileName = selectedFile.getName().toLowerCase();
+            if (!fileName.endsWith(".jpg") && !fileName.endsWith(".jpeg") && 
+                !fileName.endsWith(".png") && !fileName.endsWith(".gif") && 
+                !fileName.endsWith(".bmp")) {
+                // 获取对应的聊天窗口
+                String key = getChatViewKey(false, username);
+                ChatView chatView = chatViews.get(key);
+                
+                if (chatView != null) {
+                    chatView.showError("请选择有效的图片文件 (jpg, jpeg, png, gif, bmp)");
+                }
+                return;
+            }
+            
+            // 询问图片描述
+            String description = JOptionPane.showInputDialog(null, 
+                "请输入图片描述（可选）:", "图片描述", JOptionPane.QUESTION_MESSAGE);
+            
+            // 发送图片
+            boolean success = messageSender.sendPrivateImage(
+                model.getCurrentUsername(), username, selectedFile, description);
+            
+            if (!success) {
+                // 获取对应的聊天窗口
+                String key = getChatViewKey(false, username);
+                ChatView chatView = chatViews.get(key);
+                
+                if (chatView != null) {
+                    chatView.showError("发送图片失败，请重试");
+                }
+            }
+        }
+    }
+    
+    /**
+     * 发送群聊图片
+     * @param groupId 群组ID
+     */
+    public void sendGroupImage(String groupId) {
+        if (groupId == null || groupId.isEmpty()) {
+            // 获取对应的聊天窗口
+            String key = getChatViewKey(true, groupId);
+            ChatView chatView = chatViews.get(key);
+            
+            if (chatView != null) {
+                chatView.showError("请先选择聊天群组");
+            }
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("选择要发送的图片");
+        // 设置文件过滤器，只显示图片文件
+        FileNameExtensionFilter filter = new FileNameExtensionFilter(
+            "图片文件", "jpg", "jpeg", "png", "gif", "bmp");
+        fileChooser.setFileFilter(filter);
+        
+        int result = fileChooser.showOpenDialog(null);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            
+            // 检查文件是否为图片
+            if (!selectedFile.exists() || !selectedFile.isFile()) {
+                // 获取对应的聊天窗口
+                String key = getChatViewKey(true, groupId);
+                ChatView chatView = chatViews.get(key);
+                
+                if (chatView != null) {
+                    chatView.showError("所选文件不存在或不是有效文件");
+                }
+                return;
+            }
+            
+            // 检查文件扩展名
+            String fileName = selectedFile.getName().toLowerCase();
+            if (!fileName.endsWith(".jpg") && !fileName.endsWith(".jpeg") && 
+                !fileName.endsWith(".png") && !fileName.endsWith(".gif") && 
+                !fileName.endsWith(".bmp")) {
+                // 获取对应的聊天窗口
+                String key = getChatViewKey(true, groupId);
+                ChatView chatView = chatViews.get(key);
+                
+                if (chatView != null) {
+                    chatView.showError("请选择有效的图片文件 (jpg, jpeg, png, gif, bmp)");
+                }
+                return;
+            }
+            
+            // 询问图片描述
+            String description = JOptionPane.showInputDialog(null, 
+                "请输入图片描述（可选）:", "图片描述", JOptionPane.QUESTION_MESSAGE);
+            
+            try {
+                int groupIdInt = Integer.parseInt(groupId);
+                // 发送图片
+                boolean success = messageSender.sendGroupImage(
+                    model.getCurrentUsername(), groupIdInt, selectedFile, description);
+                
+                if (!success) {
+                    // 获取对应的聊天窗口
+                    String key = getChatViewKey(true, groupId);
+                    ChatView chatView = chatViews.get(key);
+                    
+                    if (chatView != null) {
+                        chatView.showError("发送图片失败，请重试");
+                    }
+                }
+            } catch (NumberFormatException e) {
+                // 获取对应的聊天窗口
+                String key = getChatViewKey(true, groupId);
+                ChatView chatView = chatViews.get(key);
+                
+                if (chatView != null) {
+                    chatView.showError("群组ID格式错误");
+                }
+            }
+        }
     }
 } 

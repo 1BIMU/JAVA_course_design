@@ -18,6 +18,75 @@ public class File_info implements Serializable {
     private String fileDescription; // 文件描述
     private String fileId;          // 文件唯一标识符
     private boolean infoOnly = false; // 是否只包含文件信息，不包含文件数据
+    private boolean isImage = false;  // 是否为图片文件
+    private String mimeType;          // 文件MIME类型
+    
+    /**
+     * 检查文件是否为图片
+     * @return 是否为图片
+     */
+    public boolean isImage() {
+        return isImage;
+    }
+    
+    /**
+     * 设置文件是否为图片
+     * @param isImage 是否为图片
+     */
+    public void setImage(boolean isImage) {
+        this.isImage = isImage;
+    }
+    
+    /**
+     * 获取文件MIME类型
+     * @return 文件MIME类型
+     */
+    public String getMimeType() {
+        return mimeType;
+    }
+    
+    /**
+     * 设置文件MIME类型
+     * @param mimeType 文件MIME类型
+     */
+    public void setMimeType(String mimeType) {
+        this.mimeType = mimeType;
+    }
+    
+    /**
+     * 根据文件名判断是否为图片
+     * @param fileName 文件名
+     * @return 是否为图片
+     */
+    public static boolean checkIsImage(String fileName) {
+        if (fileName == null) return false;
+        String lowerName = fileName.toLowerCase();
+        return lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || 
+               lowerName.endsWith(".png") || lowerName.endsWith(".gif") || 
+               lowerName.endsWith(".bmp");
+    }
+    
+    /**
+     * 根据文件名获取MIME类型
+     * @param fileName 文件名
+     * @return MIME类型
+     */
+    public static String getMimeTypeFromFileName(String fileName) {
+        if (fileName == null) return "application/octet-stream";
+        String lowerName = fileName.toLowerCase();
+        
+        if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) {
+            return "image/jpeg";
+        } else if (lowerName.endsWith(".png")) {
+            return "image/png";
+        } else if (lowerName.endsWith(".gif")) {
+            return "image/gif";
+        } else if (lowerName.endsWith(".bmp")) {
+            return "image/bmp";
+        } else {
+            return "application/octet-stream";
+        }
+    }
     
     public String getFileName() {
         return fileName;
@@ -25,6 +94,11 @@ public class File_info implements Serializable {
     
     public void setFileName(String fileName) {
         this.fileName = fileName;
+        // 自动检测是否为图片
+        if (fileName != null) {
+            this.isImage = checkIsImage(fileName);
+            this.mimeType = getMimeTypeFromFileName(fileName);
+        }
     }
     
     public byte[] getFileData() {

@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FlowLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.event.MouseAdapter;
@@ -32,6 +33,12 @@ import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.DefaultStyledDocument;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
+import javax.swing.ImageIcon;
+import javax.swing.JTextPane;
 
 import client.controller.ChatController;
 import client.handler.FileMessageHandler;
@@ -51,11 +58,15 @@ public class ChatView extends JFrame implements ModelObserver {
     private ClientModel model;
 
     // 界面组件
-    private JTextArea messageDisplay;
+    private JTextPane messageDisplay;
     private JTextField messageInput;
     private JButton sendButton;
-    private JButton sendFileButton; // 新增发送文件按钮
+    private JButton sendFileButton; // 发送文件按钮
+    private JButton sendImageButton; // 发送图片按钮
     private JLabel statusLabel;
+    private StyledDocument document;
+    private Style defaultStyle;
+    private Style imageStyle;
 
     // 聊天信息
     private boolean isGroupChat;
@@ -66,7 +77,9 @@ public class ChatView extends JFrame implements ModelObserver {
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     
     // 文件下载链接正则表达式
-    private final Pattern filePattern = Pattern.compile("\\[点击此处下载文件: ([0-9a-f-]+)\\]");
+    private final Pattern FILE_DOWNLOAD_PATTERN = Pattern.compile("\\[点击此处下载文件: ([0-9a-f-]+)\\]");
+    // 图片标识符的正则表达式
+    private final Pattern IMAGE_PATTERN = Pattern.compile("\\[图片ID:([0-9a-f-]+)\\]");
 
     /**
      * 构造函数 - 用于单独的聊天窗口
@@ -157,92 +170,116 @@ public class ChatView extends JFrame implements ModelObserver {
         titlePanel.add(chatTitle, BorderLayout.CENTER);
 
         // 创建消息显示区域
-        messageDisplay = new JTextArea();
+        document = new DefaultStyledDocument();
+        messageDisplay = new JTextPane(document);
         messageDisplay.setEditable(false);
-        messageDisplay.setLineWrap(true);
-        messageDisplay.setWrapStyleWord(true);
         messageDisplay.setFont(new Font("宋体", Font.PLAIN, 14));
-        messageDisplay.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        JScrollPane messageScrollPane = new JScrollPane(messageDisplay);
-        messageScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         
-        // 添加鼠标点击事件，处理文件下载链接
+        // 创建默认样式
+        defaultStyle = messageDisplay.addStyle("defaultStyle", null);
+        
+        // 创建图片样式
+        imageStyle = messageDisplay.addStyle("imageStyle", null);
+        
+        // 添加鼠标点击事件监听器
         messageDisplay.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 handleFileDownloadClick(e);
             }
         });
+        
+        // 添加滚动面板
+        JScrollPane scrollPane = new JScrollPane(messageDisplay);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 
-        // 创建消息输入区域
+        // 创建输入区域
+        JPanel inputPanel = new JPanel(new BorderLayout());
         messageInput = new JTextField();
         messageInput.setFont(new Font("宋体", Font.PLAIN, 14));
         messageInput.addActionListener(e -> sendMessage());
-
-        // 创建发送按钮
+        
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        
         sendButton = new JButton("发送");
         sendButton.addActionListener(e -> sendMessage());
-
-        // 创建发送文件按钮
+        
         sendFileButton = new JButton("发送文件");
         sendFileButton.addActionListener(e -> sendFile());
-
-        // 创建按钮面板
-        JPanel buttonPanel = new JPanel(new BorderLayout(5, 0));
-        buttonPanel.add(sendButton, BorderLayout.WEST);
-        buttonPanel.add(sendFileButton, BorderLayout.EAST);
-
-        // 创建输入面板
-        JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
+        
+        sendImageButton = new JButton("发送图片");
+        sendImageButton.addActionListener(e -> sendImage());
+        
+        buttonPanel.add(sendImageButton);
+        buttonPanel.add(sendFileButton);
+        buttonPanel.add(sendButton);
+        
         inputPanel.add(messageInput, BorderLayout.CENTER);
         inputPanel.add(buttonPanel, BorderLayout.EAST);
 
         // 组装面板
         panel.add(titlePanel, BorderLayout.NORTH);
-        panel.add(messageScrollPane, BorderLayout.CENTER);
+        panel.add(scrollPane, BorderLayout.CENTER);
         panel.add(inputPanel, BorderLayout.SOUTH);
 
         return panel;
     }
     
     /**
-     * 处理文件下载链接点击
+     * 处理文件下载点击事件
      * @param e 鼠标事件
      */
     private void handleFileDownloadClick(MouseEvent e) {
         try {
-            int offset = messageDisplay.viewToModel(e.getPoint());
-            Document doc = messageDisplay.getDocument();
+            int offset = messageDisplay.viewToModel2D(e.getPoint());
+            String text = document.getText(0, document.getLength());
             
-            // 获取当前行的文本
-            int lineStart = 0;
-            int lineEnd = doc.getLength();
-            for (int i = offset; i >= 0; i--) {
-                if (doc.getText(i, 1).equals("\n")) {
-                    lineStart = i + 1;
-                    break;
-                }
-            }
-            for (int i = offset; i < doc.getLength(); i++) {
-                if (doc.getText(i, 1).equals("\n")) {
-                    lineEnd = i;
-                    break;
-                }
+            // 查找点击位置所在的行
+            int lineStart = text.lastIndexOf('\n', offset) + 1;
+            int lineEnd = text.indexOf('\n', offset);
+            if (lineEnd == -1) {
+                lineEnd = text.length();
             }
             
-            String line = doc.getText(lineStart, lineEnd - lineStart);
+            String line = text.substring(lineStart, lineEnd);
             
-            // 检查是否包含文件下载链接
-            Matcher matcher = filePattern.matcher(line);
-            if (matcher.find()) {
-                String fileId = matcher.group(1);
-                System.out.println("点击了文件下载链接: " + fileId);
-                
-                // 下载文件
+            // 检查是否点击了文件下载链接
+            Matcher fileMatcher = FILE_DOWNLOAD_PATTERN.matcher(line);
+            if (fileMatcher.find()) {
+                String fileId = fileMatcher.group(1);
                 FileMessageHandler.downloadFile(fileId);
+                return;
+            }
+            
+            // 检查是否点击了图片标识符
+            Matcher imageMatcher = IMAGE_PATTERN.matcher(line);
+            if (imageMatcher.find()) {
+                String imageId = imageMatcher.group(1);
+                displayImage(imageId);
             }
         } catch (BadLocationException ex) {
-            ex.printStackTrace();
+            System.err.println("处理点击事件时出错: " + ex.getMessage());
+        }
+    }
+    
+    /**
+     * 显示图片
+     * @param imageId 图片ID
+     */
+    private void displayImage(String imageId) {
+        ImageIcon image = FileMessageHandler.getImage(imageId);
+        if (image != null) {
+            // 创建一个新窗口显示原始大小的图片
+            JFrame imageFrame = new JFrame("图片查看");
+            JLabel imageLabel = new JLabel(image);
+            JScrollPane scrollPane = new JScrollPane(imageLabel);
+            
+            imageFrame.getContentPane().add(scrollPane);
+            imageFrame.setSize(800, 600);
+            imageFrame.setLocationRelativeTo(null);
+            imageFrame.setVisible(true);
+        } else {
+            JOptionPane.showMessageDialog(null, "无法加载图片，可能已过期或不可用", "错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -312,6 +349,17 @@ public class ChatView extends JFrame implements ModelObserver {
     }
 
     /**
+     * 发送图片
+     */
+    private void sendImage() {
+        if (isGroupChat) {
+            controller.sendGroupImage(targetId);
+        } else {
+            controller.sendPrivateImage(targetId);
+        }
+    }
+
+    /**
      * 加载历史聊天记录
      */
     private void loadChatHistory() {
@@ -332,76 +380,85 @@ public class ChatView extends JFrame implements ModelObserver {
         }
         
         // 显示加载提示
-        messageDisplay.setText("正在加载消息...\n");
+        try {
+            document.remove(0, document.getLength());
+            document.insertString(0, "正在加载消息...\n", defaultStyle);
+        } catch (BadLocationException e) {
+            System.err.println("显示加载提示时出错: " + e.getMessage());
+        }
         
         // 获取未读消息
         List<Chat_info> unreadMessages = model.getUnreadMessages(isGroupChat, targetId);
         
         controller.loadChatHistory(chatInfo, history -> {
             SwingUtilities.invokeLater(() -> {
-                messageDisplay.setText("");
-                
-                // 使用Set去重，避免重复显示相同的消息
-                Set<String> uniqueMessages = new HashSet<>();
-                
-                // 显示历史消息
-                if (history != null && !history.isEmpty()) {
-                    for (String line : history) {
-                        // 解析保存的消息格式: 时间戳|发送者|消息内容
-                        String[] parts = line.split("\\|", 3);
-                        if (parts.length >= 3) {
-                            String timestamp = parts[0];
-                            String sender = parts[1];
-                            String text = parts[2];
-                            
-                            // 尝试解析并格式化时间戳
-                            try {
-                                // 如果时间戳只包含时分秒，添加当前日期
-                                if (timestamp.matches("\\d{2}:\\d{2}:\\d{2}")) {
-                                    LocalDateTime now = LocalDateTime.now();
-                                    timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + " " + timestamp;
+                try {
+                    document.remove(0, document.getLength());
+                    
+                    // 使用Set去重，避免重复显示相同的消息
+                    Set<String> uniqueMessages = new HashSet<>();
+                    
+                    // 显示历史消息
+                    if (history != null && !history.isEmpty()) {
+                        for (String line : history) {
+                            // 解析保存的消息格式: 时间戳|发送者|消息内容
+                            String[] parts = line.split("\\|", 3);
+                            if (parts.length >= 3) {
+                                String timestamp = parts[0];
+                                String sender = parts[1];
+                                String text = parts[2];
+                                
+                                // 尝试解析并格式化时间戳
+                                try {
+                                    // 如果时间戳只包含时分秒，添加当前日期
+                                    if (timestamp.matches("\\d{2}:\\d{2}:\\d{2}")) {
+                                        LocalDateTime now = LocalDateTime.now();
+                                        timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + " " + timestamp;
+                                    }
+                                    // 如果时间戳格式不符合预期，保持原样
+                                } catch (Exception e) {
+                                    // 保持原始时间戳
                                 }
-                                // 如果时间戳格式不符合预期，保持原样
-                            } catch (Exception e) {
-                                // 保持原始时间戳
+                                
+                                // 构建格式化的消息
+                                String formattedMessage = "[" + timestamp + "] " + sender + ": " + text;
+                                
+                                // 如果是新消息，则添加到显示中
+                                if (uniqueMessages.add(formattedMessage)) {
+                                    document.insertString(document.getLength(), formattedMessage + "\n", defaultStyle);
+                                }
+                            } else {
+                                // 如果格式不正确，直接显示原始行
+                                document.insertString(document.getLength(), line + "\n", defaultStyle);
                             }
-                            
-                            // 构建格式化的消息
-                            String formattedMessage = "[" + timestamp + "] " + sender + ": " + text;
-                            
-                            // 如果是新消息，则添加到显示中
-                            if (uniqueMessages.add(formattedMessage)) {
-                                messageDisplay.append(formattedMessage + "\n");
-                            }
-                        } else {
-                            // 如果格式不正确，直接显示原始行
-                            messageDisplay.append(line + "\n");
                         }
                     }
-                }
-                
-                // 显示未读消息，如果有的话
-                if (!unreadMessages.isEmpty()) {
-                    // 添加分隔线，标记未读消息的开始
-                    messageDisplay.append("\n----- 以下是未读消息 -----\n\n");
                     
-                    // 遍历未读消息并显示
-                    for (Chat_info msg : unreadMessages) {
-                        String timestamp = LocalDateTime.now().format(timeFormatter);
-                        String sender = msg.getFrom_username();
-                        String text = msg.getText();
+                    // 显示未读消息，如果有的话
+                    if (!unreadMessages.isEmpty()) {
+                        // 添加分隔线，标记未读消息的开始
+                        document.insertString(document.getLength(), "\n----- 以下是未读消息 -----\n\n", defaultStyle);
                         
-                        // 显示未读消息
-                        messageDisplay.append("[" + timestamp + "] " + sender + ": " + text + "\n");
+                        // 遍历未读消息并显示
+                        for (Chat_info msg : unreadMessages) {
+                            String timestamp = LocalDateTime.now().format(timeFormatter);
+                            String sender = msg.getFrom_username();
+                            String text = msg.getText();
+                            
+                            // 显示未读消息
+                            document.insertString(document.getLength(), "[" + timestamp + "] " + sender + ": " + text + "\n", defaultStyle);
+                        }
                     }
-                }
-                
-                // 滚动到最底部
-                messageDisplay.setCaretPosition(messageDisplay.getDocument().getLength());
-                
-                // 将未读消息标记为已读
-                if (!unreadMessages.isEmpty()) {
-                    model.markMessagesAsRead(isGroupChat, targetId);
+                    
+                    // 滚动到最底部
+                    messageDisplay.setCaretPosition(document.getLength());
+                    
+                    // 将未读消息标记为已读
+                    if (!unreadMessages.isEmpty()) {
+                        model.markMessagesAsRead(isGroupChat, targetId);
+                    }
+                } catch (BadLocationException e) {
+                    System.err.println("加载历史记录时出错: " + e.getMessage());
                 }
             });
         });
@@ -412,11 +469,16 @@ public class ChatView extends JFrame implements ModelObserver {
     */
     public void displayMessage(String message) {
         SwingUtilities.invokeLater(() -> {
-            // 添加时间戳
-            String timestamp = LocalDateTime.now().format(timeFormatter);
-            messageDisplay.append("[" + timestamp + "] " + message + "\n");
-            // 滚动到最底部
-            messageDisplay.setCaretPosition(messageDisplay.getDocument().getLength());
+            try {
+                // 添加时间戳
+                String timestamp = LocalDateTime.now().format(timeFormatter);
+                String formattedMessage = "[" + timestamp + "] " + message;
+                document.insertString(document.getLength(), formattedMessage + "\n", defaultStyle);
+                // 滚动到底部
+                messageDisplay.setCaretPosition(document.getLength());
+            } catch (BadLocationException e) {
+                System.err.println("添加消息时出错: " + e.getMessage());
+            }
         });
     }
 
@@ -519,5 +581,53 @@ public class ChatView extends JFrame implements ModelObserver {
      */
     public String getTargetId() {
         return targetId;
+    }
+
+    /**
+     * 添加消息到聊天窗口
+     * @param message 消息文本
+     */
+    public void addMessage(String message) {
+        try {
+            // 检查消息中是否包含图片标识符
+            Matcher matcher = IMAGE_PATTERN.matcher(message);
+            
+            if (matcher.find()) {
+                // 如果包含图片标识符，分割消息并插入图片
+                int start = matcher.start();
+                int end = matcher.end();
+                String imageId = matcher.group(1);
+                
+                // 添加消息前半部分
+                document.insertString(document.getLength(), message.substring(0, start), defaultStyle);
+                
+                // 获取并添加图片
+                ImageIcon image = FileMessageHandler.getImage(imageId);
+                if (image != null) {
+                    StyleConstants.setIcon(imageStyle, image);
+                    document.insertString(document.getLength(), " ", imageStyle);
+                    document.insertString(document.getLength(), "\n点击图片查看原图", defaultStyle);
+                } else {
+                    // 如果图片加载失败，显示文本
+                    document.insertString(document.getLength(), "[图片]", defaultStyle);
+                }
+                
+                // 添加消息后半部分（如果有）
+                if (end < message.length()) {
+                    document.insertString(document.getLength(), message.substring(end), defaultStyle);
+                }
+            } else {
+                // 如果不包含图片标识符，直接添加消息
+                document.insertString(document.getLength(), message, defaultStyle);
+            }
+            
+            // 添加换行
+            document.insertString(document.getLength(), "\n", defaultStyle);
+            
+            // 滚动到底部
+            messageDisplay.setCaretPosition(document.getLength());
+        } catch (BadLocationException e) {
+            System.err.println("添加消息时出错: " + e.getMessage());
+        }
     }
 }
