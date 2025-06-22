@@ -60,7 +60,35 @@ public class AudioStreamManager {
      */
     public void initialize() throws SocketException {
         if (socket == null || socket.isClosed()) {
-            socket = new DatagramSocket(localPort);
+            try {
+                // 尝试方法1: 使用标准构造函数
+                socket = new DatagramSocket(null); // 先不绑定
+                socket.setReuseAddress(true); // 允许地址重用
+                socket.bind(new InetSocketAddress(localPort)); // 然后绑定
+                System.out.println("Socket创建成功(方法1): 本地端口=" + localPort);
+            } catch (Exception e) {
+                System.err.println("Socket创建失败(方法1): " + e.getMessage());
+                
+                try {
+                    // 尝试方法2: 直接指定端口
+                    socket = new DatagramSocket(localPort);
+                    System.out.println("Socket创建成功(方法2): 本地端口=" + localPort);
+                } catch (Exception e2) {
+                    System.err.println("Socket创建失败(方法2): " + e2.getMessage());
+                    
+                    try {
+                        // 尝试方法3: 使用通配地址
+                        socket = new DatagramSocket(localPort, InetAddress.getByName("0.0.0.0"));
+                        System.out.println("Socket创建成功(方法3): 本地端口=" + localPort);
+                    } catch (UnknownHostException uhe) {
+                        System.err.println("Socket创建失败(方法3): 无法解析通配地址: " + uhe.getMessage());
+                        // 尝试方法4: 不指定地址
+                        socket = new DatagramSocket(localPort);
+                        System.out.println("Socket创建成功(方法4): 本地端口=" + localPort);
+                    }
+                }
+            }
+            
             socket.setSoTimeout(100); // 设置超时，以便能及时关闭
             
             // 增加配置以提高可靠性
@@ -75,10 +103,49 @@ public class AudioStreamManager {
                 // 设置性能选项
                 socket.setTrafficClass(0x10); // 低延迟
                 
+                // 禁用回环模式检查
+                try {
+                    java.lang.reflect.Field field = socket.getClass().getDeclaredField("socket");
+                    field.setAccessible(true);
+                    Object socketImpl = field.get(socket);
+                    
+                    java.lang.reflect.Method setOption = socketImpl.getClass().getDeclaredMethod(
+                            "setOption", int.class, Object.class);
+                    setOption.setAccessible(true);
+                    
+                    // 禁用回环模式检查 (IP_MULTICAST_LOOP = 18)
+                    setOption.invoke(socketImpl, 18, false);
+                    System.out.println("禁用回环模式检查成功");
+                } catch (Exception e) {
+                    System.err.println("禁用回环模式检查失败: " + e.getMessage());
+                }
+                
                 System.out.println("UDP Socket配置: " +
                                   "本地端口=" + localPort + 
                                   ", 接收缓冲区=" + socket.getReceiveBufferSize() + 
-                                  ", 发送缓冲区=" + socket.getSendBufferSize());
+                                  ", 发送缓冲区=" + socket.getSendBufferSize() + 
+                                  ", 广播=" + socket.getBroadcast() + 
+                                  ", 地址重用=" + socket.getReuseAddress());
+                
+                // 测试Socket是否正常工作
+                try {
+                    byte[] testData = new byte[10];
+                    DatagramPacket testPacket;
+                    try {
+                        testPacket = new DatagramPacket(
+                                testData, testData.length,
+                                InetAddress.getByName("127.0.0.1"),
+                                localPort
+                        );
+                        socket.send(testPacket);
+                        System.out.println("Socket测试发送成功");
+                    } catch (UnknownHostException uhe) {
+                        System.err.println("Socket测试发送失败: 无法解析本地回环地址: " + uhe.getMessage());
+                    }
+                } catch (Exception e) {
+                    System.err.println("Socket测试发送失败: " + e.getMessage());
+                }
+                
             } catch (Exception e) {
                 System.err.println("设置Socket选项失败，但将继续使用: " + e.getMessage());
             }
@@ -114,19 +181,58 @@ public class AudioStreamManager {
         }
 
         try {
-            InetAddress remoteAddress = InetAddress.getByName(remoteHost);
+            // 尝试多种方式解析远程主机地址
+            InetAddress remoteAddress = null;
+            try {
+                // 方法1: 直接解析
+                remoteAddress = InetAddress.getByName(remoteHost);
+                System.out.println("远程地址解析成功(方法1): " + remoteAddress.getHostAddress());
+            } catch (Exception e) {
+                System.err.println("远程地址解析失败(方法1): " + e.getMessage());
+                
+                try {
+                    // 方法2: 使用主机名
+                    remoteAddress = InetAddress.getByName(remoteHost);
+                    System.out.println("远程地址解析成功(方法2): " + remoteAddress.getHostAddress());
+                } catch (Exception e2) {
+                    System.err.println("远程地址解析失败(方法2): " + e2.getMessage());
+                    
+                    // 方法3: 直接使用IP地址
+                    if (remoteHost.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+                        String[] parts = remoteHost.split("\\.");
+                        byte[] addr = new byte[4];
+                        for (int i = 0; i < 4; i++) {
+                            addr[i] = (byte) Integer.parseInt(parts[i]);
+                        }
+                        remoteAddress = InetAddress.getByAddress(addr);
+                        System.out.println("远程地址解析成功(方法3): " + remoteAddress.getHostAddress());
+                    } else {
+                        throw new IOException("无法解析远程主机地址: " + remoteHost);
+                    }
+                }
+            }
+            
+            // 创建数据包
             DatagramPacket packet = new DatagramPacket(
                     audioData, offset, length,
                     remoteAddress,
                     remotePort
             );
 
+            // 发送数据包
             socket.send(packet);
+            
+            // 记录发送情况
+            System.out.println("发送音频数据: 大小=" + length + " 字节, 目标=" + 
+                              remoteAddress.getHostAddress() + ":" + remotePort);
+            
         } catch (UnknownHostException e) {
             System.err.println("发送音频数据失败: 无法解析远程主机地址 " + remoteHost + ": " + e.getMessage());
+            e.printStackTrace();
             throw new IOException("无法解析远程主机地址: " + remoteHost, e);
         } catch (IOException e) {
             System.err.println("发送音频数据失败: " + e.getMessage());
+            e.printStackTrace();
             throw e;
         }
     }
@@ -225,15 +331,46 @@ public class AudioStreamManager {
 
         executorService.submit(() -> {
             try {
+                // 确保socket已初始化
+                if (socket == null || socket.isClosed()) {
+                    try {
+                        System.out.println("接收线程中重新初始化socket");
+                        initialize();
+                    } catch (Exception e) {
+                        System.err.println("接收线程中初始化socket失败: " + e.getMessage());
+                        e.printStackTrace();
+                        return;
+                    }
+                }
+                
                 byte[] buffer = new byte[BUFFER_SIZE];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 int packetsReceived = 0;
                 int totalBytesReceived = 0;
                 long startTime = System.currentTimeMillis();
+                long lastReceiveTime = System.currentTimeMillis();
+                boolean receivedAny = false;
 
                 while (receiving.get()) {
                     try {
+                        // 检查socket是否仍然有效
+                        if (socket == null || socket.isClosed()) {
+                            System.err.println("接收线程中发现socket已关闭，尝试重新初始化");
+                            try {
+                                initialize();
+                            } catch (Exception e) {
+                                System.err.println("接收线程中重新初始化socket失败: " + e.getMessage());
+                                break;
+                            }
+                        }
+                        
+                        // 设置超时
+                        socket.setSoTimeout(1000);
+                        
+                        // 接收数据包
                         socket.receive(packet);
+                        lastReceiveTime = System.currentTimeMillis();
+                        receivedAny = true;
                         
                         // 记录接收到的数据包
                         packetsReceived++;
@@ -260,14 +397,29 @@ public class AudioStreamManager {
                         packet.setLength(buffer.length);
 
                     } catch (SocketTimeoutException e) {
-                        // 超时，继续循环
+                        // 超时，检查是否长时间未收到数据
+                        long now = System.currentTimeMillis();
+                        if (receivedAny && now - lastReceiveTime > 10000) { // 10秒未收到数据
+                            System.out.println("警告: 已超过10秒未收到音频数据");
+                        }
                     } catch (Exception e) {
                         if (receiving.get()) {
                             System.err.println("接收音频数据时出错: " + e.getMessage());
                             e.printStackTrace();
+                            
+                            // 短暂暂停，避免CPU占用过高
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                            }
                         }
                     }
                 }
+                
+                System.out.println("接收线程结束: 共接收 " + packetsReceived + " 个包, " + 
+                                  totalBytesReceived + " 字节");
+                
             } catch (Exception e) {
                 System.err.println("音频接收线程出错: " + e.getMessage());
                 e.printStackTrace();

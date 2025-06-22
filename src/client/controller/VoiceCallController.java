@@ -864,6 +864,25 @@ public class VoiceCallController {
                 System.err.println("远程主机地址未设置，无法启动音频流");
                 return; // 无法启动音频流
             }
+            
+            // 尝试解析远程主机地址，验证其有效性
+            try {
+                java.net.InetAddress remoteAddr = java.net.InetAddress.getByName(remoteHost);
+                System.out.println("远程主机地址解析成功: " + remoteAddr.getHostAddress());
+                
+                // 检查是否可以连接到远程主机
+                try {
+                    java.net.Socket testSocket = new java.net.Socket();
+                    testSocket.connect(new java.net.InetSocketAddress(remoteHost, remotePort), 1000);
+                    testSocket.close();
+                    System.out.println("成功连接到远程主机: " + remoteHost + ":" + remotePort);
+                } catch (Exception e) {
+                    System.out.println("无法连接到远程主机: " + e.getMessage() + "，但将继续尝试UDP通信");
+                }
+            } catch (Exception e) {
+                System.err.println("无法解析远程主机地址: " + e.getMessage());
+                // 继续尝试，因为有些环境下解析可能失败但UDP通信仍然可行
+            }
 
             // 创建音频流管理器
             AudioStreamManager streamManager = new AudioStreamManager(localPort);
@@ -879,7 +898,8 @@ public class VoiceCallController {
                 public void onAudioDataReceived(byte[] audioData) {
                     // 添加日志记录接收到的音频数据
                     System.out.println("接收到音频数据: 通话ID=" + callId + 
-                                      ", 数据大小=" + audioData.length + " 字节");
+                                      ", 数据大小=" + audioData.length + " 字节" +
+                                      ", 时间戳=" + System.currentTimeMillis());
                     
                     // 将接收到的音频数据发送到播放服务，并关联通话ID
                     playbackService.queueAudio(audioData, callId);
@@ -933,6 +953,23 @@ public class VoiceCallController {
                     ", 远程主机=" + remoteHost +
                     ", 远程端口=" + remotePort);
 
+            // 发送测试音频数据，验证连接
+            new Thread(() -> {
+                try {
+                    System.out.println("发送测试音频数据...");
+                    Thread.sleep(1000);
+                    byte[] testData = new byte[128];
+                    // 填充一些数据
+                    for (int i = 0; i < testData.length; i++) {
+                        testData[i] = (byte)(i % 256);
+                    }
+                    streamManager.sendAudioData(testData, 0, testData.length);
+                    System.out.println("测试音频数据已发送");
+                } catch (Exception e) {
+                    System.err.println("发送测试音频数据失败: " + e.getMessage());
+                }
+            }).start();
+
         } catch (Exception e) {
             System.err.println("创建音频流失败: " + e.getMessage());
             e.printStackTrace();
@@ -954,8 +991,41 @@ public class VoiceCallController {
      */
     private String getLocalIpAddress() {
         try {
-            // 尝试获取非回环地址
+            // 显示所有网络接口信息，便于调试
+            System.out.println("========= 网络接口信息 =========");
             java.util.Enumeration<java.net.NetworkInterface> interfaces = java.net.NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                java.net.NetworkInterface iface = interfaces.nextElement();
+                System.out.println("接口: " + iface.getDisplayName() + 
+                                  ", 名称: " + iface.getName() + 
+                                  ", 状态: " + (iface.isUp() ? "启用" : "禁用") + 
+                                  ", 回环: " + iface.isLoopback() + 
+                                  ", 虚拟: " + iface.isVirtual());
+                
+                java.util.Enumeration<java.net.InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    java.net.InetAddress addr = addresses.nextElement();
+                    System.out.println("  地址: " + addr.getHostAddress() + 
+                                      ", IPv4: " + (addr instanceof java.net.Inet4Address) + 
+                                      ", 回环: " + addr.isLoopbackAddress());
+                }
+            }
+            System.out.println("===============================");
+            
+            // 尝试方法1: 通过Socket连接获取本地IP
+            try {
+                java.net.Socket socket = new java.net.Socket();
+                socket.connect(new java.net.InetSocketAddress("8.8.8.8", 53), 1000);
+                String ip = socket.getLocalAddress().getHostAddress();
+                socket.close();
+                System.out.println("通过Socket获取IP地址: " + ip);
+                return ip;
+            } catch (Exception e) {
+                System.out.println("Socket方法获取IP失败: " + e.getMessage());
+            }
+            
+            // 尝试方法2: 获取非回环地址
+            interfaces = java.net.NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 java.net.NetworkInterface iface = interfaces.nextElement();
                 // 跳过禁用的接口
@@ -975,16 +1045,33 @@ public class VoiceCallController {
                 }
             }
             
-            // 如果没有找到合适的地址，尝试获取本地主机地址
+            // 尝试方法3: 获取本地主机地址
             java.net.InetAddress localHost = java.net.InetAddress.getLocalHost();
             String ip = localHost.getHostAddress();
             System.out.println("使用本地主机地址: " + ip);
+            
+            // 检查是否是回环地址，如果是则尝试其他方法
+            if (ip.startsWith("127.")) {
+                System.out.println("警告: 获取到的是回环地址，尝试获取外部IP地址");
+                
+                // 尝试方法4: 使用本地主机名解析
+                String hostName = localHost.getHostName();
+                java.net.InetAddress[] allAddrs = java.net.InetAddress.getAllByName(hostName);
+                for (java.net.InetAddress addr : allAddrs) {
+                    if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
+                        ip = addr.getHostAddress();
+                        System.out.println("通过主机名解析获取IP: " + ip);
+                        return ip;
+                    }
+                }
+            }
+            
             return ip;
         } catch (Exception e) {
             System.err.println("获取本地IP地址失败: " + e.getMessage());
             e.printStackTrace();
-            System.out.println("使用默认地址: 127.0.0.1");
-            return "127.0.0.1"; // 默认本地回环地址
+            System.out.println("使用默认地址: 0.0.0.0");
+            return "0.0.0.0"; // 使用通配地址，可能对某些环境更友好
         }
     }
 
