@@ -98,6 +98,11 @@ public class FileIO {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING);
     }
+
+    public void writeGroup(int groupId, String groupName, String member) throws IOException {
+        // 将单个用户转为单元素列表，调用原方法
+        writeGroup(groupId, groupName, new ArrayList<>(Collections.singletonList(member)));
+    }
     
     // 兼容旧方法，但加上默认群名
     public void writeGroup(int groupId, ArrayList<String> members) throws IOException {

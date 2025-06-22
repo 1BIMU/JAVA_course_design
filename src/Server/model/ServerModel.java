@@ -9,9 +9,33 @@ import io.IOStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ServerModel {
     ChatServer server;
+    HashMap<Integer,ArrayList<String>> OrgIDToUserList=new HashMap<>();//这是维护的一个，尚未接受邀请的小组的哈希表，是小组ID到未同意邀请的用户的列表
+    public void addUserByOrgID(int orgID,ArrayList<String> userList){//将用户添加到动态的列表中
+        ArrayList<String> CurrUserList=OrgIDToUserList.get(orgID);
+        ArrayList<String> mergedList = Stream.concat(CurrUserList.stream(), userList.stream())
+                .distinct()
+                .collect(Collectors.toCollection(ArrayList::new));
+        OrgIDToUserList.put(orgID,mergedList);
+    }
+    public ArrayList<String> getUserByOrgID(int orgID){
+        return OrgIDToUserList.get(orgID);
+    }
+    public void removeUserByOrgID(int orgID, String User) {
+        // 1. 检查 orgID 是否存在
+        if (!OrgIDToUserList.containsKey(orgID)) {
+            return; // 或抛出异常，如 throw new IllegalArgumentException("orgID 不存在");
+        }
+
+        // 2. 直接操作列表（无需 remove 和重新 put）
+        ArrayList<String> currUserList = OrgIDToUserList.get(orgID);
+        currUserList.remove(User);
+        OrgIDToUserList.put(orgID,currUserList);
+    }
     public ServerModel(ChatServer server) {
         this.server = server;
     }

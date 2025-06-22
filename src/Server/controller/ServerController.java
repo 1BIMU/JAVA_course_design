@@ -14,12 +14,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.Queue;
 
 public class ServerController {
     Socket socket;
     ChatServer server;
     ServerWindow ServerFrame;
     ServerHandler ServerHandler;
+    HashMap<Integer,ArrayList<String>> OrgIDToUserList=new HashMap<>();//这是维护的一个，尚未接受邀请的小组的哈希表，是小组ID到未同意邀请的用户的列表
     //实例化model
     ServerModel model;
     String current_user;//标记当前线程服务的用户
@@ -270,9 +272,8 @@ public class ServerController {
         int group_id =  oi.getGroup_id();
         ArrayList<String> org_members = oi.getMembers();
         ArrayList<String> group_members = fileio_group.getGroupMembers(group_id);
-        if(oi.isEstablish()){//如果是建立组的消息
+        if(oi.getType()==1){//如果是建立组的消息
             ServerFrame.appendLog(current_user + " 尝试创建新群内的组");
-
             boolean flag = model.IsInGroup(group_members,org_members);
             if(!fileio_group.groupExists(group_id)||flag){//如果群聊不存在，或者有人不在群聊中，那么告诉它，建立错误就行了
                 ServerFrame.appendLog("错误，在尝试创建成员为： "+ org_members+"的组时发生错误，该群聊不存在，或者组中有人不在群聊中，返回报错信息");
@@ -293,16 +294,24 @@ public class ServerController {
                     break;
                 }
             }
-            //写入服务端的数据文件中
-            System.out.println(ID);
-            System.out.println(org_members);//为什么这里收到的to_user是Null??
-            ServerFrame.appendLog("创建新组 ID: " + ID + "，成员: " + org_members);
-            fileio_org.writeGroup(ID,org_members);
+            //把初始用户写入服务端的数据文件中
+            ServerFrame.appendLog("创建新组 ID: " + ID + "，初始成员: " + oi.getFromUser());
+
+            fileio_org.writeGroup(ID,oi.getOrg_name(),oi.getFromUser());//写入到文件中
+
+            //把这些人都加入到哈希表的维护中
+            group_members.remove(oi.getFromUser());
+            model.addUserByOrgID(group_id,group_members);
+
             //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
             oi.setOrg_id(ID);
+            oi.setType(2);
+            oi.setExist(true);
+            oi.setSuccess(true);
+
             model.Send2Users(INFO,org_members);
             ServerFrame.appendLog("已通知所有群成员: " + org_members);
-        }else{//如果不是建立群聊，那么是对文件中进行修改
+        }else if(oi.getType()==4){//如果不是建立群聊，那么是对文件中进行修改
             ServerFrame.appendLog("修改群组 " + oi.getOrg_id() + " 的成员");
             FileIO fileio = new FileIO();
             ArrayList<String> added_people = oi.getAdded_people();
@@ -324,15 +333,29 @@ public class ServerController {
             //然后发消息，通知added_people被添加
             Org_info added = oi;
             added.setExist(true);
+            added.setType(2);
+            added.setSuccess(true);
             RETURN.set_org_info(added);
             model.Send2Users(INFO,added_people);
-
             ServerFrame.appendLog("移除成员: " + removed_people);
             //发消息，告诉removed_people被删除
             Org_info removed = oi;
+            removed.setSuccess(true);
             removed.setExist(false);
             RETURN.set_org_info(removed);
             model.Send2Users(INFO,removed_people);
+        }else if(oi.getType()==3){//如果接收到客户回复的同意邀请的结果，那么：
+            if(oi.isSuccess()){//如果确实是同意邀请
+                //首先检查用户是否在Hashmap中
+                ArrayList<String> User_List = model.getUserByOrgID(group_id);
+                if(User_List.contains(oi.getFromUser())){//如果包含，那么删除它，然后写入文件
+                    model.removeUserByOrgID(group_id,oi.getFromUser());
+                    //写入文件
+                    fileio_org.writeGroup(group_id,oi.getOrg_name(),oi.getFromUser());
+                }
+            }else{//如果明确的拒绝邀请
+                model.removeUserByOrgID(group_id,oi.getFromUser());
+            }
         }
     }
 

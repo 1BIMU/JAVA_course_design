@@ -11,18 +11,23 @@ public class Org_info implements Serializable {//组类型的消息
     private int Group_id;//属于的群的ID
     private String Org_name;//组名
     private int Org_id;//组id
+    private String FromUser;
     private ArrayList<String> members; // 群组成员列表
     private ArrayList<String> added_people;//添加成员
     private ArrayList<String> removed_people;//删去该成员
-    private boolean establish;//是否为新建组类型的消息
+    private int type;//1代表建立小组，2代表邀请用户信息，3代表用户对邀请信息的响应，4代表添加用户信息
     private boolean exist;//用于告知用户，你是否还存在于这个组中
-    private boolean success;//用于判断群聊是否建立成功
-    public void setEstablish(boolean establish) {
-        this.establish = establish;
+    private boolean success;//用于判断消息是否成功
+    public int getType() {
+        return type;
     }
-    public boolean isEstablish() {
-        return establish;
+    public void setFromUser(String fromUser) {
+        FromUser = fromUser;
     }
+    public String getFromUser() {
+        return FromUser;
+    }
+    public void setType(int type) {this.type = type;}
     public void setExist(boolean exist) {
         this.exist = exist;
     }
