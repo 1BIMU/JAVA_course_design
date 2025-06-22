@@ -31,6 +31,8 @@ public class Voice_info implements Serializable {
     private int port;
     // 错误消息
     private String error_message;
+    // 额外信息（用于存储多个IP地址等辅助信息）
+    private Object extra;
 
     /**
      * 通话状态枚举
@@ -170,5 +172,13 @@ public class Voice_info implements Serializable {
 
     public void setError_message(String error_message) {
         this.error_message = error_message;
+    }
+    
+    public Object getExtra() {
+        return extra;
+    }
+
+    public void setExtra(Object extra) {
+        this.extra = extra;
     }
 }

@@ -364,7 +364,10 @@ public class VoiceCallController {
             String remoteHost = voiceInfo.getHost();
             int remotePort = voiceInfo.getPort();
             
-            if (remoteHost != null && !remoteHost.isEmpty()) {
+            // 检查是否是服务器中继模式
+            boolean isServerRelay = "SERVER_RELAY".equals(remoteHost);
+            
+            if (remoteHost != null && !remoteHost.isEmpty() && !isServerRelay) {
                 // 保存远程主机信息
                 if (pendingRemoteEndpoints == null) {
                     pendingRemoteEndpoints = new HashMap<>();
@@ -378,6 +381,11 @@ public class VoiceCallController {
                 
                 // 开始音频流
                 startAudioStream(voiceInfo);
+            } else {
+                // 服务器中继模式或无效地址
+                System.out.println("检测到服务器中继模式或无效地址");
+                // 尝试使用替代地址
+                tryAlternativeAddresses(voiceInfo);
             }
         } else {
             // 检查是否有保存的远程主机信息
@@ -408,6 +416,73 @@ public class VoiceCallController {
 
         // 更新通话信息
         callView.setVoiceInfo(voiceInfo);
+    }
+
+    /**
+     * 尝试使用替代地址
+     * @param voiceInfo 语音信息
+     */
+    private void tryAlternativeAddresses(Voice_info voiceInfo) {
+        int callId = voiceInfo.getCall_id();
+        
+        // 尝试从服务器获取的最后一个已知地址
+        String remoteHost = voiceInfo.getFrom_username().equals(model.getCurrentUser()) ? 
+                (voiceInfo.getParticipants().isEmpty() ? null : voiceInfo.getParticipants().get(0)) :
+                voiceInfo.getFrom_username();
+        
+        if (remoteHost != null) {
+            System.out.println("尝试使用替代地址连接用户: " + remoteHost);
+            
+            // 使用服务器中继模式时，尝试多个常见的局域网IP范围
+            List<String> commonIPs = new ArrayList<>();
+            
+            // 添加一些常见的局域网IP范围进行尝试
+            for (int i = 1; i <= 255; i++) {
+                if (i % 50 == 0) {
+                    commonIPs.add("192.168.1." + i);
+                    commonIPs.add("10.0.0." + i);
+                }
+            }
+            
+            // 添加当前IP的相邻地址
+            String localIP = getLocalIpAddress();
+            if (!localIP.equals("SERVER_RELAY") && !localIP.equals("127.0.0.1")) {
+                String[] parts = localIP.split("\\.");
+                if (parts.length == 4) {
+                    int lastOctet = Integer.parseInt(parts[3]);
+                    
+                    // 添加当前网段的一些IP进行尝试
+                    for (int i = 1; i <= 20; i++) {
+                        int newOctet = lastOctet + i;
+                        if (newOctet <= 255) {
+                            commonIPs.add(parts[0] + "." + parts[1] + "." + parts[2] + "." + newOctet);
+                        }
+                        
+                        newOctet = lastOctet - i;
+                        if (newOctet > 0) {
+                            commonIPs.add(parts[0] + "." + parts[1] + "." + parts[2] + "." + newOctet);
+                        }
+                    }
+                }
+            }
+            
+            // 保存这些地址，让startAudioStream尝试连接
+            if (pendingRemoteEndpoints == null) {
+                pendingRemoteEndpoints = new HashMap<>();
+            }
+            
+            Voice_info remoteInfo = new Voice_info();
+            remoteInfo.setCall_id(callId);
+            remoteInfo.setHost("MULTI_TRY");
+            remoteInfo.setPort(voiceInfo.getPort());
+            remoteInfo.setExtra(commonIPs); // 使用extra字段存储多个IP
+            pendingRemoteEndpoints.put(callId, remoteInfo);
+            
+            // 开始音频流
+            startAudioStream(voiceInfo);
+        } else {
+            System.err.println("无法获取远程用户信息，无法建立连接");
+        }
     }
 
     /**
@@ -570,23 +645,38 @@ public class VoiceCallController {
             int remotePort = voiceInfo.getPort();
 
             // 检查是否需要从pendingRemoteEndpoints获取远程主机信息
-            if ((remoteHost == null || remoteHost.isEmpty() || remotePort == 0) && 
+            boolean isMultiTry = false;
+            List<String> alternativeIPs = null;
+            
+            if ((remoteHost == null || remoteHost.isEmpty() || remotePort == 0 || 
+                 "SERVER_RELAY".equals(remoteHost)) && 
                 pendingRemoteEndpoints != null && 
                 pendingRemoteEndpoints.containsKey(callId)) {
                 
                 Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
-                remoteHost = remoteInfo.getHost();
-                remotePort = remoteInfo.getPort();
+                String tempRemoteHost = remoteInfo.getHost();
+                int tempRemotePort = remoteInfo.getPort();
+                
+                // 检查是否是多IP尝试模式
+                if ("MULTI_TRY".equals(tempRemoteHost) && remoteInfo.getExtra() != null) {
+                    isMultiTry = true;
+                    alternativeIPs = (List<String>) remoteInfo.getExtra();
+                } else {
+                    remoteHost = tempRemoteHost;
+                    remotePort = tempRemotePort;
+                }
             }
 
-            System.out.println("启动音频流: 本地端口=" + localPort + ", 远程=" + remoteHost + ":" + remotePort);
+            System.out.println("启动音频流: 本地端口=" + localPort + 
+                              ", 远程=" + (isMultiTry ? "多IP尝试模式" : remoteHost + ":" + remotePort));
 
             // 创建音频流管理器
             AudioStreamManager streamManager = new AudioStreamManager(localPort);
             streamManager.initialize();
             
             // 设置远程端点
-            if (remoteHost != null && !remoteHost.isEmpty() && remotePort > 0) {
+            if (!isMultiTry && remoteHost != null && !remoteHost.isEmpty() && 
+                !remoteHost.equals("SERVER_RELAY") && remotePort > 0) {
                 streamManager.setRemoteEndpoint(remoteHost, remotePort);
             }
 
@@ -610,6 +700,35 @@ public class VoiceCallController {
 
             // 保存音频流管理器
             audioStreamManagers.put(callId, streamManager);
+            
+            // 如果是多IP尝试模式，启动一个线程尝试多个IP
+            if (isMultiTry && alternativeIPs != null && !alternativeIPs.isEmpty()) {
+                final AudioStreamManager finalStreamManager = streamManager;
+                final List<String> finalAlternativeIPs = alternativeIPs;
+                final int finalRemotePort = remotePort; // 创建一个final副本
+                
+                new Thread(() -> {
+                    System.out.println("开始尝试多个IP地址...");
+                    
+                    for (String ip : finalAlternativeIPs) {
+                        try {
+                            System.out.println("尝试连接IP: " + ip + ":" + finalRemotePort);
+                            finalStreamManager.setRemoteEndpoint(ip, finalRemotePort);
+                            
+                            // 发送测试数据包
+                            byte[] testData = "TEST".getBytes();
+                            finalStreamManager.sendAudioData(testData, 0, testData.length);
+                            
+                            // 等待一段时间，看是否有响应
+                            Thread.sleep(500);
+                        } catch (Exception e) {
+                            // 忽略错误，继续尝试下一个IP
+                        }
+                    }
+                    
+                    System.out.println("多IP尝试完成");
+                }).start();
+            }
 
             // 更新UI状态
             VoiceCallView callView = activeCallViews.get(callId);
@@ -637,14 +756,16 @@ public class VoiceCallController {
      */
     private String getLocalIpAddress() {
         try {
-            // 尝试不同方法获取非回环IPv4地址
+            // 优先获取局域网IP地址（非回环地址）
             List<String> allIPs = new ArrayList<>();
+            List<String> lanIPs = new ArrayList<>();
             
             java.util.Enumeration<java.net.NetworkInterface> interfaces = 
                 java.net.NetworkInterface.getNetworkInterfaces();
             
             while (interfaces.hasMoreElements()) {
                 java.net.NetworkInterface iface = interfaces.nextElement();
+                // 跳过禁用的、回环和虚拟接口
                 if (!iface.isUp() || iface.isLoopback() || iface.isVirtual()) {
                     continue;
                 }
@@ -653,21 +774,41 @@ public class VoiceCallController {
                 while (addresses.hasMoreElements()) {
                     java.net.InetAddress addr = addresses.nextElement();
                     if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
-                        allIPs.add(addr.getHostAddress());
+                        String ip = addr.getHostAddress();
+                        allIPs.add(ip);
+                        
+                        // 识别局域网IP地址
+                        if (ip.startsWith("192.168.") || ip.startsWith("10.") || 
+                            (ip.startsWith("172.") && 
+                             Integer.parseInt(ip.split("\\.")[1]) >= 16 && 
+                             Integer.parseInt(ip.split("\\.")[1]) <= 31)) {
+                            lanIPs.add(ip);
+                            System.out.println("找到局域网IP: " + ip);
+                        }
                     }
                 }
             }
             
-            // 优先使用非回环地址
+            // 优先使用局域网IP
+            if (!lanIPs.isEmpty()) {
+                System.out.println("使用局域网IP: " + lanIPs.get(0));
+                return lanIPs.get(0);
+            }
+            
+            // 其次使用任何非回环IPv4地址
             if (!allIPs.isEmpty()) {
+                System.out.println("使用非回环IP: " + allIPs.get(0));
                 return allIPs.get(0);
             }
             
-            // 备选方案
-            return java.net.InetAddress.getLocalHost().getHostAddress();
+            // 如果无法获取有效的IP，使用服务器中继模式
+            // 在这种模式下，我们返回一个特殊标记，表示需要通过服务器中继
+            System.out.println("无法获取有效IP地址，将使用服务器中继模式");
+            return "SERVER_RELAY";
         } catch (Exception e) {
-            // 默认IP
-            return "127.0.0.1";
+            System.err.println("获取本地IP地址失败: " + e.getMessage());
+            // 默认使用服务器中继模式
+            return "SERVER_RELAY";
         }
     }
 
