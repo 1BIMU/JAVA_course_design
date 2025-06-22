@@ -30,6 +30,7 @@ public class ChatController {
     // 修改为Map，用于管理多个聊天窗口
     private Map<String, ChatView> chatViews = new HashMap<>();
     private MessageSender messageSender; // 替代原来的Socket
+    private VoiceCallController voiceCallController; // 语音通话控制器
     
     /*
         构造函数
@@ -676,5 +677,47 @@ public class ChatController {
                 }
             }
         }
+    }
+    
+    /**
+     * 获取语音通话控制器
+     * @return 语音通话控制器
+     */
+    public VoiceCallController getVoiceCallController() {
+        if (voiceCallController == null) {
+            voiceCallController = new VoiceCallController(model, messageSender);
+        }
+        return voiceCallController;
+    }
+    
+    /**
+     * 获取群组成员列表
+     * @param groupId 群组ID
+     * @return 群组成员列表
+     */
+    public List<String> getGroupMembers(String groupId) {
+        try {
+            // 尝试解析群组ID
+            int id = Integer.parseInt(groupId);
+            
+            // 从模型中获取群组信息
+            Group_info group = model.getGroups().get(id);
+            if (group != null) {
+                return new ArrayList<>(group.getMembers());
+            } else {
+                // 如果模型中没有群组信息，尝试从文件中读取
+                try {
+                    FileIO fileIO = new FileIO();
+                    return fileIO.getGroupMembers(id);
+                } catch (IOException e) {
+                    System.err.println("获取群组成员失败: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        } catch (NumberFormatException e) {
+            System.err.println("群组ID格式错误: " + groupId);
+        }
+        
+        return Collections.emptyList();
     }
 } 

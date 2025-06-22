@@ -79,7 +79,7 @@ public class LoginController {
             loginView.showMessage("已成功连接到服务器: " + server + ":" + port);
             
             // 初始化并启动消息监听线程
-            MessageListener messageListener = new MessageListener(socket, model, this, null);
+            MessageListener messageListener = new MessageListener(socket, model, this, null, null);
             messageListener.setMessageSender(messageSender);
             messageListener.start();
             
@@ -114,7 +114,7 @@ public class LoginController {
     */
     public void login(String username, String password) {
         // 使用默认服务器地址和端口号
-        login("localhost", 8888, username, password);
+        login("localhost", 6688, username, password);
     }
 
     /*
@@ -149,7 +149,7 @@ public class LoginController {
             loginView.showMessage("已成功连接到服务器: " + server + ":" + port);
             
             // 初始化并启动消息监听线程
-            MessageListener messageListener = new MessageListener(socket, model, this, null);
+            MessageListener messageListener = new MessageListener(socket, model, this, null, null);
             messageListener.setMessageSender(messageSender);
             messageListener.start();
             
@@ -184,7 +184,7 @@ public class LoginController {
     */
     public void register(String username, String password, String confirmPassword) {
         // 使用默认服务器地址和端口号
-        register("localhost", 8888, username, password, confirmPassword);
+        register("localhost", 6688, username, password, confirmPassword);
     }
 
     /*

@@ -3,6 +3,7 @@ import java.io.Serializable;
 
 public class encap_info implements Serializable {//对各种消息进行封装
     private static final long serialVersionUID = -2664356335109440843L;
+
     private int type;// 这里是消息的类型，其中，1代表群管理消息，2代表登出，3代表登录，4代表聊天类的消息，5代表注册消息，6代表组管理消息，7代表文件传输消息，如果要添加消息，直接在后面改就行
     private Chat_info chat_info;
     private Group_info group_info;
@@ -10,6 +11,7 @@ public class encap_info implements Serializable {//对各种消息进行封装
     private Reg_info reg_info;
     private Org_info org_info;
     private File_info file_info; // 新增文件传输信息
+    private Voice_info voice_info;
     
     public Chat_info get_chat_info(){
         return chat_info;
@@ -65,5 +67,13 @@ public class encap_info implements Serializable {//对各种消息进行封装
     
     public void set_file_info(File_info file_info) {
         this.file_info = file_info;
+    }
+
+    public Voice_info get_voice_info() {
+        return voice_info;
+    }
+
+    public void set_voice_info(Voice_info voice_info) {
+        this.voice_info = voice_info;
     }
 }

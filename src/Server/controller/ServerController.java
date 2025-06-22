@@ -10,6 +10,7 @@ import io.IOStream;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -358,5 +359,39 @@ public class ServerController {
             }
         }
     }
+    /**Add commentMore actions
+     * 处理语音通话消息
+     * @param INFO 接收到的语音通话消息
+     * @param RETURN 响应消息
+     * @throws IOException 如果IO操作失败
+     */
+    public void VoiceCall_handler(encap_info INFO, encap_info RETURN) throws IOException {
+        Voice_info voiceInfo = INFO.get_voice_info();
+        if (voiceInfo == null) return;
 
+        String fromUsername = voiceInfo.getFrom_username();
+        ServerFrame.appendLog("接收到语音通话请求: 来自用户 " + fromUsername);
+
+        // 转发语音通话消息给目标用户
+        List<String> participants = voiceInfo.getParticipants();
+        if (participants != null && !participants.isEmpty()) {
+            for (String participant : participants) {
+                // 获取目标用户的Socket
+                Socket targetSocket = server.getSocketByUsername(participant);
+                if (targetSocket != null && !targetSocket.isClosed()) {
+                    // 转发语音通话消息
+                    IOStream.writeMessage(targetSocket, INFO);
+                    ServerFrame.appendLog("转发语音通话消息到用户: " + participant);
+                } else {
+                    // 目标用户不在线，发送错误响应给发起者
+                    ServerFrame.appendLog("用户 " + participant + " 不在线，无法接收语音通话");
+                    voiceInfo.setError("用户 " + participant + " 不在线");
+                    voiceInfo.setStatus(Voice_info.CallStatus.ERROR);
+                    RETURN.set_type(8);
+                    RETURN.set_voice_info(voiceInfo);
+                    IOStream.writeMessage(socket, RETURN);
+                }
+            }
+        }
+    }
 }

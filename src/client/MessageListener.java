@@ -6,6 +6,7 @@ import java.net.SocketException;
 
 import client.controller.ChatController;
 import client.controller.LoginController;
+import client.controller.VoiceCallController;
 import client.handler.ClientMessageHandler;
 import client.handler.ClientMessageHandlerFactory;
 import client.model.ClientModel;
@@ -40,6 +41,7 @@ public class MessageListener extends Thread {
     private ClientModel model; // 客户端数据模型
     private LoginController loginController; // 登录控制器
     private ChatController chatController; // 聊天控制器
+    private VoiceCallController voiceCallController; // 语音通话控制器
     private boolean running; // 运行标志位
     private ClientMessageHandlerFactory handlerFactory; // 消息处理器工厂
     private MessageSender messageSender; // 消息发送器，用于重连
@@ -52,13 +54,15 @@ public class MessageListener extends Thread {
     */
     public MessageListener(Socket socket, ClientModel model, 
                           LoginController loginController, 
-                          ChatController chatController) {
+                          ChatController chatController,
+                           VoiceCallController voiceCallController) {
         this.socket = socket;   // 与服务器连接的Socket
         this.model = model;     // 客户端数据模型
         this.loginController = loginController; // 登录控制器
         this.chatController = chatController; // 聊天控制器
+        this.voiceCallController = voiceCallController; // 语音通话控制器
         this.running = true;   // 运行标志位
-        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController);
+        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController, voiceCallController);
         instance = this; // 保存实例引用
     }
     
@@ -68,8 +72,10 @@ public class MessageListener extends Thread {
      */
     public void setChatController(ChatController chatController) {
         this.chatController = chatController;
-        // 同时更新消息处理器工厂中的聊天控制器引用
-        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController);
+        // 获取或创建语音通话控制器
+        this.voiceCallController = chatController.getVoiceCallController();
+        // 同时更新消息处理器工厂中的引用
+        this.handlerFactory = new ClientMessageHandlerFactory(model, loginController, chatController, voiceCallController);
     }
     
     /**

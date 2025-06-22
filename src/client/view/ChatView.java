@@ -41,6 +41,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTextPane;
 
 import client.controller.ChatController;
+import client.controller.VoiceCallController;
 import client.handler.FileMessageHandler;
 import client.model.ClientModel;
 import client.model.ClientModel.ModelObserver;
@@ -56,6 +57,7 @@ public class ChatView extends JFrame implements ModelObserver {
     // 控制器和模型引用
     private ChatController controller;
     private ClientModel model;
+    private VoiceCallController voiceCallController; // 添加语音通话控制器引用
 
     // 界面组件
     private JTextPane messageDisplay;
@@ -63,6 +65,7 @@ public class ChatView extends JFrame implements ModelObserver {
     private JButton sendButton;
     private JButton sendFileButton; // 发送文件按钮
     private JButton sendImageButton; // 发送图片按钮
+    private JButton voiceCallButton; // 语音通话按钮
     private JLabel statusLabel;
     private StyledDocument document;
     private Style defaultStyle;
@@ -95,6 +98,7 @@ public class ChatView extends JFrame implements ModelObserver {
         this.isGroupChat = isGroupChat;
         this.targetId = targetId;
         this.targetName = targetName;
+        this.voiceCallController = controller.getVoiceCallController(); // 获取语音通话控制器
 
         // 设置窗口属性
         setTitle(isGroupChat ? "群聊: " + targetName : "与 " + targetName + " 聊天");
@@ -210,6 +214,10 @@ public class ChatView extends JFrame implements ModelObserver {
         sendImageButton = new JButton("发送图片");
         sendImageButton.addActionListener(e -> sendImage());
         
+        voiceCallButton = new JButton("语音通话");
+        voiceCallButton.addActionListener(e -> initiateVoiceCall());
+        
+        buttonPanel.add(voiceCallButton);
         buttonPanel.add(sendImageButton);
         buttonPanel.add(sendFileButton);
         buttonPanel.add(sendButton);
@@ -356,6 +364,51 @@ public class ChatView extends JFrame implements ModelObserver {
             controller.sendGroupImage(targetId);
         } else {
             controller.sendPrivateImage(targetId);
+        }
+    }
+
+    /**
+     * 发起语音通话
+     */
+    private void initiateVoiceCall() {
+        if (voiceCallController == null) {
+            showError("语音通话功能不可用");
+            return;
+        }
+        
+        try {
+            if (isGroupChat) {
+                // 获取群组成员列表
+                List<String> participants = controller.getGroupMembers(targetId);
+                if (participants == null || participants.isEmpty()) {
+                    showError("无法获取群组成员信息");
+                    return;
+                }
+                
+                // 过滤掉当前用户
+                String currentUser = controller.getCurrentUsername();
+                participants.removeIf(username -> username.equals(currentUser));
+                
+                if (participants.isEmpty()) {
+                    showError("群组中没有其他成员");
+                    return;
+                }
+                
+                // 发起群组语音会议
+                voiceCallController.initiateConference(participants);
+                
+                // 显示提示消息
+                displayMessage("系统消息: 已发起群组语音会议");
+            } else {
+                // 发起一对一语音通话
+                voiceCallController.initiateCall(targetId);
+                
+                // 显示提示消息
+                displayMessage("系统消息: 正在呼叫 " + targetName);
+            }
+        } catch (Exception e) {
+            showError("发起语音通话失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

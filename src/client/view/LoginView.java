@@ -182,7 +182,7 @@ public class LoginView extends JFrame {
         gbc.gridx = 1;
         gbc.gridy = 1;
         gbc.weightx = 1.0;
-        portField = new JTextField("8888", 20);
+        portField = new JTextField("6688", 20);
         formPanel.add(portField, gbc);
         
         // 用户名
@@ -313,7 +313,7 @@ public class LoginView extends JFrame {
         gbc.gridx = 1;
         gbc.gridy = 1;
         gbc.weightx = 1.0;
-        JTextField regPortField = new JTextField("8888", 20);
+        JTextField regPortField = new JTextField("6688", 20);
         formPanel.add(regPortField, gbc);
         
         // 用户名

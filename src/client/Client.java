@@ -3,7 +3,7 @@ package client;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.UnknownHostException;
-
+import client.controller.VoiceCallController;
 import client.controller.ChatController;
 import client.controller.LoginController;
 import client.controller.LoginController.LoginCallback;
@@ -26,6 +26,7 @@ public class Client implements LoginCallback {
     private ClientModel model; // 客户端数据模型
     private LoginController loginController; // 登录控制器
     private ChatController chatController; // 聊天控制器
+    private VoiceCallController voiceCallController; // 语音通话控制器
     private ContactListView contactListView; // 联系人列表视图
     private MessageListener messageListener;
     private MessageSender messageSender; // 新增
@@ -44,6 +45,7 @@ public class Client implements LoginCallback {
         this.loginController.setLoginCallback(this);
         
         this.chatController = new ChatController(model, messageSender);
+        this.voiceCallController = new VoiceCallController(model, messageSender);
     }
     
     /*
@@ -69,7 +71,7 @@ public class Client implements LoginCallback {
             this.messageSender.setSocket(socket);
             
             // 启动消息监听线程
-            this.messageListener = new MessageListener(socket, model, loginController, chatController);
+            this.messageListener = new MessageListener(socket, model, loginController, chatController, voiceCallController);
             this.messageListener.setMessageSender(messageSender);
             this.messageListener.start();
             
