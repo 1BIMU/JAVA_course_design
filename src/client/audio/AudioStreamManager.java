@@ -61,94 +61,26 @@ public class AudioStreamManager {
     public void initialize() throws SocketException {
         if (socket == null || socket.isClosed()) {
             try {
-                // 尝试方法1: 使用标准构造函数
-                socket = new DatagramSocket(null); // 先不绑定
-                socket.setReuseAddress(true); // 允许地址重用
-                socket.bind(new InetSocketAddress(localPort)); // 然后绑定
-                System.out.println("Socket创建成功(方法1): 本地端口=" + localPort);
+                // 简化Socket创建过程，只使用最可靠的方式
+                socket = new DatagramSocket(null);
+                socket.setReuseAddress(true);
+                socket.bind(new InetSocketAddress(localPort));
+                System.out.println("UDP Socket创建成功: 本地端口=" + localPort);
             } catch (Exception e) {
-                System.err.println("Socket创建失败(方法1): " + e.getMessage());
-                
-                try {
-                    // 尝试方法2: 直接指定端口
-                    socket = new DatagramSocket(localPort);
-                    System.out.println("Socket创建成功(方法2): 本地端口=" + localPort);
-                } catch (Exception e2) {
-                    System.err.println("Socket创建失败(方法2): " + e2.getMessage());
-                    
-                    try {
-                        // 尝试方法3: 使用通配地址
-                        socket = new DatagramSocket(localPort, InetAddress.getByName("0.0.0.0"));
-                        System.out.println("Socket创建成功(方法3): 本地端口=" + localPort);
-                    } catch (UnknownHostException uhe) {
-                        System.err.println("Socket创建失败(方法3): 无法解析通配地址: " + uhe.getMessage());
-                        // 尝试方法4: 不指定地址
-                        socket = new DatagramSocket(localPort);
-                        System.out.println("Socket创建成功(方法4): 本地端口=" + localPort);
-                    }
-                }
+                System.err.println("UDP Socket创建失败: " + e.getMessage());
+                // 备用方案
+                socket = new DatagramSocket(localPort);
             }
             
-            socket.setSoTimeout(100); // 设置超时，以便能及时关闭
+            socket.setSoTimeout(100);
             
-            // 增加配置以提高可靠性
-            try {
-                // 允许广播
-                socket.setBroadcast(true);
-                
-                // 设置更大的发送和接收缓冲区
-                socket.setReceiveBufferSize(65536); // 64KB
-                socket.setSendBufferSize(65536); // 64KB
-                
-                // 设置性能选项
-                socket.setTrafficClass(0x10); // 低延迟
-                
-                // 禁用回环模式检查
-                try {
-                    java.lang.reflect.Field field = socket.getClass().getDeclaredField("socket");
-                    field.setAccessible(true);
-                    Object socketImpl = field.get(socket);
-                    
-                    java.lang.reflect.Method setOption = socketImpl.getClass().getDeclaredMethod(
-                            "setOption", int.class, Object.class);
-                    setOption.setAccessible(true);
-                    
-                    // 禁用回环模式检查 (IP_MULTICAST_LOOP = 18)
-                    setOption.invoke(socketImpl, 18, false);
-                    System.out.println("禁用回环模式检查成功");
-                } catch (Exception e) {
-                    System.err.println("禁用回环模式检查失败: " + e.getMessage());
-                }
-                
-                System.out.println("UDP Socket配置: " +
-                                  "本地端口=" + localPort + 
-                                  ", 接收缓冲区=" + socket.getReceiveBufferSize() + 
-                                  ", 发送缓冲区=" + socket.getSendBufferSize() + 
-                                  ", 广播=" + socket.getBroadcast() + 
-                                  ", 地址重用=" + socket.getReuseAddress());
-                
-                // 测试Socket是否正常工作
-                try {
-                    byte[] testData = new byte[10];
-                    DatagramPacket testPacket;
-                    try {
-                        testPacket = new DatagramPacket(
-                                testData, testData.length,
-                                InetAddress.getByName("127.0.0.1"),
-                                localPort
-                        );
-                        socket.send(testPacket);
-                        System.out.println("Socket测试发送成功");
-                    } catch (UnknownHostException uhe) {
-                        System.err.println("Socket测试发送失败: 无法解析本地回环地址: " + uhe.getMessage());
-                    }
-                } catch (Exception e) {
-                    System.err.println("Socket测试发送失败: " + e.getMessage());
-                }
-                
-            } catch (Exception e) {
-                System.err.println("设置Socket选项失败，但将继续使用: " + e.getMessage());
-            }
+            // 简化Socket配置
+            socket.setBroadcast(true);
+            socket.setReceiveBufferSize(65536);
+            socket.setSendBufferSize(65536);
+            socket.setTrafficClass(0x10); // 低延迟
+            
+            System.out.println("UDP Socket就绪: 本地端口=" + localPort);
         }
     }
 
@@ -186,16 +118,16 @@ public class AudioStreamManager {
             try {
                 // 方法1: 直接解析
                 remoteAddress = InetAddress.getByName(remoteHost);
-                System.out.println("远程地址解析成功(方法1): " + remoteAddress.getHostAddress());
+                System.out.println("远程地址解析成功(直接解析): " + remoteAddress.getHostAddress());
             } catch (Exception e) {
-                System.err.println("远程地址解析失败(方法1): " + e.getMessage());
+                System.err.println("远程地址解析失败(直接解析): " + e.getMessage());
                 
                 try {
                     // 方法2: 使用主机名
                     remoteAddress = InetAddress.getByName(remoteHost);
-                    System.out.println("远程地址解析成功(方法2): " + remoteAddress.getHostAddress());
+                    System.out.println("远程地址解析成功(使用主机名): " + remoteAddress.getHostAddress());
                 } catch (Exception e2) {
-                    System.err.println("远程地址解析失败(方法2): " + e2.getMessage());
+                    System.err.println("远程地址解析失败(使用主机名): " + e2.getMessage());
                     
                     // 方法3: 直接使用IP地址
                     if (remoteHost.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
@@ -205,7 +137,7 @@ public class AudioStreamManager {
                             addr[i] = (byte) Integer.parseInt(parts[i]);
                         }
                         remoteAddress = InetAddress.getByAddress(addr);
-                        System.out.println("远程地址解析成功(方法3): " + remoteAddress.getHostAddress());
+                        System.out.println("远程地址解析成功(直接使用IP地址): " + remoteAddress.getHostAddress());
                     } else {
                         throw new IOException("无法解析远程主机地址: " + remoteHost);
                     }
@@ -255,12 +187,14 @@ public class AudioStreamManager {
 
         // 确保Socket已初始化
         if (socket == null || socket.isClosed()) {
-            System.err.println("无法开始发送音频数据: Socket未初始化或已关闭");
             initialize();
         }
 
         System.out.println("开始发送音频数据到 " + remoteHost + ":" + remotePort);
         sending.set(true);
+        
+        // 发送连接建立包
+        sendConnectPacket();
 
         executorService.submit(() -> {
             try {
@@ -277,10 +211,6 @@ public class AudioStreamManager {
                                 }
                             } catch (IOException e) {
                                 System.err.println("发送音频数据失败: " + e.getMessage());
-                                if (sending.get()) {
-                                    // 如果仍然在发送状态，则记录错误但不停止捕获
-                                    e.printStackTrace();
-                                }
                             }
                         }
                     }
@@ -289,13 +219,23 @@ public class AudioStreamManager {
                 try {
                     captureService.startCapture();
 
-                    // 持续发送直到停止标志设置为false
+                    // 简化心跳机制，只保留基本保活功能
+                    long lastKeepAliveTime = 0;
+                    
                     while (sending.get()) {
                         try {
+                            long now = System.currentTimeMillis();
+                            if (now - lastKeepAliveTime > 30000) { // 每30秒
+                                sendKeepAlivePacket();
+                                lastKeepAliveTime = now;
+                            }
+                            
                             Thread.sleep(100);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             break;
+                        } catch (Exception e) {
+                            System.err.println("发送保活包失败: " + e.getMessage());
                         }
                     }
                 } finally {
@@ -305,7 +245,6 @@ public class AudioStreamManager {
 
             } catch (Exception e) {
                 System.err.println("音频捕获失败: " + e.getMessage());
-                e.printStackTrace();
                 sending.set(false);
             }
         });
@@ -333,14 +272,7 @@ public class AudioStreamManager {
             try {
                 // 确保socket已初始化
                 if (socket == null || socket.isClosed()) {
-                    try {
-                        System.out.println("接收线程中重新初始化socket");
-                        initialize();
-                    } catch (Exception e) {
-                        System.err.println("接收线程中初始化socket失败: " + e.getMessage());
-                        e.printStackTrace();
-                        return;
-                    }
+                    initialize();
                 }
                 
                 byte[] buffer = new byte[BUFFER_SIZE];
@@ -355,59 +287,97 @@ public class AudioStreamManager {
                     try {
                         // 检查socket是否仍然有效
                         if (socket == null || socket.isClosed()) {
-                            System.err.println("接收线程中发现socket已关闭，尝试重新初始化");
-                            try {
-                                initialize();
-                            } catch (Exception e) {
-                                System.err.println("接收线程中重新初始化socket失败: " + e.getMessage());
-                                break;
+                            initialize();
+                        }
+                        
+                        socket.setSoTimeout(1000);
+                        
+                        try {
+                            // 接收数据包
+                            socket.receive(packet);
+                            lastReceiveTime = System.currentTimeMillis();
+                            receivedAny = true;
+                            
+                            // 获取发送方地址和端口
+                            String senderHost = packet.getAddress().getHostAddress();
+                            int senderPort = packet.getPort();
+                            
+                            // 如果远程主机地址未设置，则使用第一个接收到的包的源地址和端口
+                            if (remoteHost == null || remoteHost.isEmpty() || remotePort == 0) {
+                                remoteHost = senderHost;
+                                remotePort = senderPort;
+                                System.out.println("自动设置远程主机: " + remoteHost + ":" + remotePort);
+                            }
+                            
+                            // 检查数据包大小
+                            int packetLength = packet.getLength();
+                            
+                            // 简化控制包处理，只识别必要的类型
+                            if (packetLength == 4) {
+                                byte[] controlData = Arrays.copyOf(packet.getData(), 4);
+                                int controlType = java.nio.ByteBuffer.wrap(controlData).getInt();
+                                
+                                // 简化为两种控制包: 连接包和保活包
+                                if (controlType == 0x434F4E4E) { // "CONN"的ASCII码
+                                    System.out.println("收到连接包，建立连接: " + senderHost + ":" + senderPort);
+                                    sendConnectAckPacket(packet.getAddress(), packet.getPort());
+                                    remoteHost = senderHost;
+                                    remotePort = senderPort;
+                                    continue;
+                                } else if (controlType == 0x4B414C56) { // "KALV"的ASCII码
+                                    // 收到保活包，只记录日志
+                                    System.out.println("收到保活包");
+                                    continue;
+                                }
+                            }
+                            
+                            // 检查数据长度是否符合音频帧要求(2字节的整数倍)
+                            if (packetLength % 2 != 0) {
+                                System.out.println("警告: 收到非整数帧的音频数据，跳过处理");
+                                continue;
+                            }
+                            
+                            // 记录接收到的数据包
+                            packetsReceived++;
+                            totalBytesReceived += packetLength;
+                            
+                            // 减少日志输出频率，只在必要时记录
+                            if (packetsReceived % 50 == 0) {
+                                System.out.println("已接收音频数据: " + packetsReceived + "个包, " + 
+                                                  totalBytesReceived + "字节");
+                            }
+
+                            // 创建数据副本
+                            byte[] audioData = Arrays.copyOf(packet.getData(), packetLength);
+
+                            // 通知所有监听器
+                            for (AudioStreamListener listener : listeners.values()) {
+                                listener.onAudioDataReceived(audioData);
+                            }
+                        } catch (SocketTimeoutException e) {
+                            // 超时，检查是否长时间未收到数据
+                            long now = System.currentTimeMillis();
+                            
+                            // 如果已收到数据但长时间未接收，尝试发送保活包
+                            if (receivedAny && now - lastReceiveTime > 15000) {
+                                System.out.println("已超过15秒未收到音频数据，发送保活包");
+                                if (remoteHost != null && !remoteHost.isEmpty()) {
+                                    try {
+                                        sendConnectPacket();
+                                    } catch (Exception e2) {
+                                        System.err.println("发送保活包失败");
+                                    }
+                                }
                             }
                         }
                         
-                        // 设置超时
-                        socket.setSoTimeout(1000);
-                        
-                        // 接收数据包
-                        socket.receive(packet);
-                        lastReceiveTime = System.currentTimeMillis();
-                        receivedAny = true;
-                        
-                        // 记录接收到的数据包
-                        packetsReceived++;
-                        totalBytesReceived += packet.getLength();
-                        
-                        // 每接收10个包或每5秒记录一次统计信息
-                        if (packetsReceived % 10 == 0 || System.currentTimeMillis() - startTime > 5000) {
-                            System.out.println("UDP接收统计: 收到包数=" + packetsReceived + 
-                                              ", 总字节数=" + totalBytesReceived +
-                                              ", 来源=" + packet.getAddress().getHostAddress() + 
-                                              ":" + packet.getPort());
-                            startTime = System.currentTimeMillis();
-                        }
-
-                        // 创建数据副本
-                        byte[] audioData = Arrays.copyOf(packet.getData(), packet.getLength());
-
-                        // 通知所有监听器
-                        for (AudioStreamListener listener : listeners.values()) {
-                            listener.onAudioDataReceived(audioData);
-                        }
-
                         // 重置包大小，准备下一次接收
                         packet.setLength(buffer.length);
 
-                    } catch (SocketTimeoutException e) {
-                        // 超时，检查是否长时间未收到数据
-                        long now = System.currentTimeMillis();
-                        if (receivedAny && now - lastReceiveTime > 10000) { // 10秒未收到数据
-                            System.out.println("警告: 已超过10秒未收到音频数据");
-                        }
                     } catch (Exception e) {
                         if (receiving.get()) {
                             System.err.println("接收音频数据时出错: " + e.getMessage());
-                            e.printStackTrace();
-                            
-                            // 短暂暂停，避免CPU占用过高
+                            // 避免频繁错误日志
                             try {
                                 Thread.sleep(100);
                             } catch (InterruptedException ie) {
@@ -417,12 +387,10 @@ public class AudioStreamManager {
                     }
                 }
                 
-                System.out.println("接收线程结束: 共接收 " + packetsReceived + " 个包, " + 
-                                  totalBytesReceived + " 字节");
+                System.out.println("接收线程结束: 共接收 " + packetsReceived + " 个包");
                 
             } catch (Exception e) {
                 System.err.println("音频接收线程出错: " + e.getMessage());
-                e.printStackTrace();
             }
         });
     }
@@ -474,5 +442,103 @@ public class AudioStreamManager {
          * @param audioData 接收到的音频数据
          */
         void onAudioDataReceived(byte[] audioData);
+    }
+
+    /**
+     * 发送连接包，用于建立连接和NAT穿透
+     * @throws IOException 如果发送失败
+     */
+    private void sendConnectPacket() throws IOException {
+        if (socket == null || socket.isClosed() || remoteHost == null || remoteHost.isEmpty()) {
+            return;
+        }
+
+        try {
+            // 解析远程主机地址
+            InetAddress remoteAddress = InetAddress.getByName(remoteHost);
+            
+            // 创建一个4字节的控制包，ASCII码为"CONN"
+            byte[] connectData = new byte[4];
+            java.nio.ByteBuffer.wrap(connectData).putInt(0x434F4E4E); // "CONN"
+            
+            // 创建数据包
+            DatagramPacket packet = new DatagramPacket(
+                    connectData, connectData.length,
+                    remoteAddress,
+                    remotePort
+            );
+
+            // 发送数据包
+            socket.send(packet);
+            System.out.println("发送连接包: " + remoteHost + ":" + remotePort);
+            
+        } catch (Exception e) {
+            System.err.println("发送连接包失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 发送连接确认包
+     * @param address 目标地址
+     * @param port 目标端口
+     * @throws IOException 如果发送失败
+     */
+    private void sendConnectAckPacket(InetAddress address, int port) throws IOException {
+        if (socket == null || socket.isClosed()) {
+            return;
+        }
+
+        try {
+            // 创建一个4字节的控制包，ASCII码为"CACK"
+            byte[] ackData = new byte[4];
+            java.nio.ByteBuffer.wrap(ackData).putInt(0x4341434B); // "CACK"
+            
+            // 创建数据包
+            DatagramPacket packet = new DatagramPacket(
+                    ackData, ackData.length,
+                    address,
+                    port
+            );
+
+            // 发送数据包
+            socket.send(packet);
+            System.out.println("发送连接确认包: " + address.getHostAddress() + ":" + port);
+            
+        } catch (Exception e) {
+            System.err.println("发送连接确认包失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 发送保活包
+     * @throws IOException 如果发送失败
+     */
+    private void sendKeepAlivePacket() throws IOException {
+        if (socket == null || socket.isClosed() || remoteHost == null || remoteHost.isEmpty()) {
+            return;
+        }
+
+        try {
+            // 解析远程主机地址
+            InetAddress remoteAddress = InetAddress.getByName(remoteHost);
+            
+            // 创建一个4字节的控制包，ASCII码为"KALV"
+            byte[] keepAliveData = new byte[4];
+            java.nio.ByteBuffer.wrap(keepAliveData).putInt(0x4B414C56); // "KALV"
+            
+            // 创建数据包
+            DatagramPacket packet = new DatagramPacket(
+                    keepAliveData, keepAliveData.length,
+                    remoteAddress,
+                    remotePort
+            );
+
+            // 发送数据包
+            socket.send(packet);
+            System.out.println("发送保活包: " + remoteHost + ":" + remotePort);
+            
+        } catch (Exception e) {
+            System.err.println("发送保活包失败: " + e.getMessage());
+        }
     }
 }

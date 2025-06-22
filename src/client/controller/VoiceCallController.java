@@ -67,7 +67,7 @@ public class VoiceCallController {
         // 创建语音信息
         Voice_info voiceInfo = new Voice_info();
         voiceInfo.setCall_id(callId);
-        voiceInfo.setFrom_username(currentUsername); // 确保设置正确的发起人
+        voiceInfo.setFrom_username(currentUsername);
         voiceInfo.addParticipant(targetUsername);
         voiceInfo.setIs_conference(false);
         voiceInfo.setStatus(Voice_info.CallStatus.REQUESTING);
@@ -79,11 +79,7 @@ public class VoiceCallController {
         voiceInfo.setHost(localHost);
         voiceInfo.setPort(localPort);
 
-        System.out.println("发起语音通话: " +
-                "发起人=" + currentUsername +
-                ", 目标=" + targetUsername +
-                ", 本地主机=" + localHost +
-                ", 本地端口=" + localPort);
+        System.out.println("发起语音通话: 目标=" + targetUsername);
 
         // 发送请求
         sendVoiceCallMessage(voiceInfo);
@@ -108,7 +104,7 @@ public class VoiceCallController {
         Voice_info voiceInfo = new Voice_info();
         voiceInfo.setCall_id(callId);
         voiceInfo.setConference_id(conferenceId);
-        voiceInfo.setFrom_username(currentUsername); // 确保设置正确的发起人
+        voiceInfo.setFrom_username(currentUsername);
         voiceInfo.setIs_conference(true);
         voiceInfo.setStatus(Voice_info.CallStatus.REQUESTING);
         voiceInfo.setCallType(Voice_info.CallType.AUDIO_ONLY);
@@ -126,11 +122,7 @@ public class VoiceCallController {
         voiceInfo.setHost(localHost);
         voiceInfo.setPort(localPort);
 
-        System.out.println("发起语音会议: " +
-                "发起人=" + currentUsername +
-                ", 参与者=" + participants.size() + "人" +
-                ", 本地主机=" + localHost +
-                ", 本地端口=" + localPort);
+        System.out.println("发起语音会议: 参与者=" + participants.size() + "人");
 
         // 发送请求
         sendVoiceCallMessage(voiceInfo);
@@ -151,33 +143,21 @@ public class VoiceCallController {
             return;
         }
 
-        // 获取通话信息
-        Voice_info voiceInfo = callView.getVoiceInfo();
-
         try {
+            // 获取通话信息
+            Voice_info voiceInfo = callView.getVoiceInfo();
+            
             // 为通话设置本地端口
             int localPort = BASE_PORT + callId % 1000;
-            int maxRetries = 5;
-            int retryCount = 0;
-            boolean portAvailable = false;
-
+            
             // 尝试找到可用端口
-            while (!portAvailable && retryCount < maxRetries) {
+            while (true) {
                 try {
-                    // 测试端口是否可用
-                    java.net.DatagramSocket testSocket = new java.net.DatagramSocket(localPort);
-                    testSocket.close();
-                    portAvailable = true;
+                    new java.net.DatagramSocket(localPort).close();
+                    break; // 端口可用
                 } catch (java.net.BindException e) {
-                    // 端口被占用，尝试下一个端口
-                    System.out.println("端口 " + localPort + " 已被占用，尝试下一个端口");
-                    localPort++;
-                    retryCount++;
+                    localPort++; // 尝试下一个端口
                 }
-            }
-
-            if (!portAvailable) {
-                throw new java.net.BindException("无法找到可用的UDP端口");
             }
 
             String localHost = getLocalIpAddress();
@@ -191,12 +171,7 @@ public class VoiceCallController {
             voiceInfo.setPort(localPort);
             voiceInfo.setStatus(Voice_info.CallStatus.ACCEPTED);
 
-            System.out.println("接受通话: " +
-                    "通话ID=" + callId +
-                    ", 本地主机=" + localHost +
-                    ", 本地端口=" + localPort +
-                    ", 远程主机=" + remoteHost +
-                    ", 远程端口=" + remotePort);
+            System.out.println("接受通话: ID=" + callId);
 
             // 发送接受消息
             sendVoiceCallMessage(voiceInfo);
@@ -204,28 +179,21 @@ public class VoiceCallController {
             // 更新UI状态
             callView.updateCallStatus(Voice_info.CallStatus.CONNECTING);
 
-            // 创建一个临时的Voice_info对象来保存远程主机信息
-            Voice_info tempInfo = new Voice_info();
-            tempInfo.setCall_id(callId);
-            tempInfo.setHost(remoteHost);
-            tempInfo.setPort(remotePort);
-
-            // 将临时对象存储在某个地方，以便后续使用
-            // 这里我们可以创建一个映射来存储这些信息
+            // 保存远程主机信息
             if (pendingRemoteEndpoints == null) {
                 pendingRemoteEndpoints = new HashMap<>();
             }
-            pendingRemoteEndpoints.put(callId, tempInfo);
+            
+            Voice_info remoteInfo = new Voice_info();
+            remoteInfo.setCall_id(callId);
+            remoteInfo.setHost(remoteHost);
+            remoteInfo.setPort(remotePort);
+            pendingRemoteEndpoints.put(callId, remoteInfo);
 
         } catch (Exception e) {
             System.err.println("接受通话失败: " + e.getMessage());
-            e.printStackTrace();
-
             // 显示错误信息
-            Voice_info errorInfo = new Voice_info();
-            errorInfo.setCall_id(callId);
-            errorInfo.setError("接受通话失败: " + e.getMessage());
-            callView.showCallError(errorInfo);
+            callView.showCallError(new Voice_info());
         }
     }
 
@@ -237,7 +205,6 @@ public class VoiceCallController {
         // 检查是否已有该通话的视图
         VoiceCallView callView = activeCallViews.get(callId);
         if (callView == null) {
-            System.err.println("找不到通话ID为 " + callId + " 的通话视图");
             return;
         }
 
@@ -249,7 +216,8 @@ public class VoiceCallController {
         sendVoiceCallMessage(voiceInfo);
 
         // 关闭通话窗口
-        endCall(callId);
+        callView.dispose();
+        activeCallViews.remove(callId);
     }
 
     /**
@@ -260,7 +228,6 @@ public class VoiceCallController {
         // 检查是否已有该通话的视图
         VoiceCallView callView = activeCallViews.get(callId);
         if (callView == null) {
-            System.err.println("找不到通话ID为 " + callId + " 的通话视图");
             return;
         }
 
@@ -269,33 +236,28 @@ public class VoiceCallController {
         voiceInfo.setStatus(Voice_info.CallStatus.ENDED);
 
         // 确保所有参与者都收到通话结束消息
-        // 如果是一对一通话
+        String currentUser = model.getCurrentUser();
         if (!voiceInfo.isIs_conference()) {
             // 确保参与者列表包含对方
-            String currentUser = model.getCurrentUser();
-            String otherParty = null;
+            String otherParty = voiceInfo.getFrom_username().equals(currentUser) ?
+                    (voiceInfo.getParticipants().isEmpty() ? null : voiceInfo.getParticipants().get(0)) :
+                    voiceInfo.getFrom_username();
             
-            // 找出对方用户名
-            if (voiceInfo.getFrom_username().equals(currentUser)) {
-                // 如果当前用户是发起方，对方是参与者
-                if (!voiceInfo.getParticipants().isEmpty()) {
-                    otherParty = voiceInfo.getParticipants().get(0);
-                }
-            } else {
-                // 如果当前用户是参与者，对方是发起方
-                otherParty = voiceInfo.getFrom_username();
-            }
-            
-            if (otherParty != null) {
-                // 确保参与者列表包含对方
-                if (!voiceInfo.getParticipants().contains(otherParty)) {
-                    voiceInfo.addParticipant(otherParty);
-                }
+            if (otherParty != null && !voiceInfo.getParticipants().contains(otherParty)) {
+                voiceInfo.addParticipant(otherParty);
             }
         }
 
-        // 发送结束消息（使用重试机制）
-        sendEndCallMessage(voiceInfo, 3);
+        // 发送结束消息
+        for (int i = 0; i < 3; i++) { // 重试三次
+            sendVoiceCallMessage(voiceInfo);
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
 
         // 停止音频流
         stopAudioStream(callId);
@@ -303,7 +265,7 @@ public class VoiceCallController {
         // 关闭通话窗口
         callView.showCallEnded();
         
-        // 延迟关闭窗口，给用户时间看到通话已结束的状态
+        // 延迟关闭窗口
         Timer timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
@@ -311,41 +273,7 @@ public class VoiceCallController {
                 callView.dispose();
                 activeCallViews.remove(callId);
             }
-        }, 3000);
-    }
-    
-    /**
-     * 发送通话结束消息，带有重试机制
-     * @param voiceInfo 语音信息
-     * @param maxRetries 最大重试次数
-     */
-    private void sendEndCallMessage(Voice_info voiceInfo, int maxRetries) {
-        int retryCount = 0;
-        boolean success = false;
-        
-        while (!success && retryCount < maxRetries) {
-            try {
-                // 发送结束消息
-                sendVoiceCallMessage(voiceInfo);
-                success = true;
-                System.out.println("成功发送通话结束消息，通话ID: " + voiceInfo.getCall_id());
-            } catch (Exception e) {
-                retryCount++;
-                System.err.println("发送通话结束消息失败，尝试重试 (" + retryCount + "/" + maxRetries + "): " + e.getMessage());
-                
-                // 等待一段时间后重试
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }
-        
-        if (!success) {
-            System.err.println("无法发送通话结束消息，已达到最大重试次数");
-        }
+        }, 2000);
     }
 
     /**
@@ -353,82 +281,49 @@ public class VoiceCallController {
      * @param voiceInfo 语音信息
      */
     public void handleVoiceCallMessage(Voice_info voiceInfo) {
+        if (voiceInfo == null) {
+            System.err.println("收到空的语音通话消息");
+            return;
+        }
+        
         int callId = voiceInfo.getCall_id();
         String currentUsername = model.getCurrentUser();
         boolean isInitiator = voiceInfo.getFrom_username().equals(currentUsername);
-
-        System.out.println("收到语音通话消息: " +
-                "状态=" + voiceInfo.getStatus() +
-                ", 当前用户=" + currentUsername +
-                ", 呼叫方=" + voiceInfo.getFrom_username() +
-                ", 是否为发起方=" + isInitiator +
-                ", 主机=" + voiceInfo.getHost() +
-                ", 端口=" + voiceInfo.getPort());
-
-        // 对于REQUESTING状态，检查当前用户是否为呼叫参与者而非发起者
-        if (voiceInfo.getStatus() == Voice_info.CallStatus.REQUESTING) {
-            if (isInitiator) {
-                // 如果当前用户是呼叫发起者，且已有该通话的视图，则不重复处理
-                if (activeCallViews.containsKey(callId)) {
-                    System.out.println("忽略自己发送的请求消息，因为已有通话视图");
-                    return;
-                }
-            } else {
-                // 检查当前用户是否为呼叫参与者
-                boolean isParticipant = false;
-                for (String participant : voiceInfo.getParticipants()) {
-                    if (participant.equals(currentUsername)) {
-                        isParticipant = true;
-                        break;
-                    }
-                }
-
-                if (!isParticipant) {
-                    System.out.println("忽略不相关的通话请求");
-                    return;
-                }
-            }
-        } else {
-            // 对于非REQUESTING状态，检查是否有对应的通话视图
-            if (!activeCallViews.containsKey(callId)) {
-                System.out.println("忽略未知通话ID的消息: " + callId);
-                return;
+        boolean isParticipant = false;
+        
+        for (String participant : voiceInfo.getParticipants()) {
+            if (participant.equals(currentUsername)) {
+                isParticipant = true;
+                break;
             }
         }
 
+        // 忽略与当前用户无关的消息
+        if (!isInitiator && !isParticipant) {
+            return;
+        }
+
+        System.out.println("收到语音通话消息: 状态=" + voiceInfo.getStatus() + ", ID=" + callId);
+
         switch (voiceInfo.getStatus()) {
             case REQUESTING:
-                // 收到呼叫请求
                 handleIncomingCall(voiceInfo);
                 break;
-
             case ACCEPTED:
-                // 通话被接受
                 handleCallAccepted(voiceInfo);
                 break;
-
             case REJECTED:
-                // 通话被拒绝
                 handleCallRejected(voiceInfo);
                 break;
-
             case ENDED:
-                // 通话结束
                 handleCallEnded(voiceInfo);
                 break;
-
             case CONNECTED:
-                // 通话已连接
                 handleCallConnected(voiceInfo);
                 break;
-
             case ERROR:
-                // 通话错误
                 handleCallError(voiceInfo);
                 break;
-
-            default:
-                System.err.println("未知的通话状态: " + voiceInfo.getStatus());
         }
     }
 
@@ -437,39 +332,16 @@ public class VoiceCallController {
      * @param voiceInfo 语音信息
      */
     private void handleIncomingCall(Voice_info voiceInfo) {
-        // 获取当前用户名
         String currentUsername = model.getCurrentUser();
         boolean isInitiator = voiceInfo.getFrom_username().equals(currentUsername);
-
-        System.out.println("处理通话请求: " +
-                "当前用户=" + currentUsername +
-                ", 呼叫方=" + voiceInfo.getFrom_username() +
-                ", 是否为发起方=" + isInitiator +
-                ", 参与者=" + voiceInfo.getParticipants());
-
+        
         // 如果当前用户是呼叫发起方，但已经有通话视图，则不重复处理
         if (isInitiator && activeCallViews.containsKey(voiceInfo.getCall_id())) {
-            System.out.println("已有通话视图，不重复处理");
             return;
-        }
-
-        // 检查主机信息是否已设置
-        if (voiceInfo.getHost() == null || voiceInfo.getHost().isEmpty()) {
-            System.err.println("来电请求中未包含主机信息，可能无法建立连接");
-
-            // 记录主机信息缺失
-            voiceInfo.setError("呼叫方未提供主机信息");
         }
 
         // 显示来电界面
         showCallView(voiceInfo);
-
-        // 在控制台输出来电信息
-        System.out.println("显示" + (isInitiator ? "呼出" : "来电") + "界面: " +
-                "来自=" + voiceInfo.getFrom_username() +
-                ", 主机=" + voiceInfo.getHost() +
-                ", 端口=" + voiceInfo.getPort() +
-                ", 会议=" + voiceInfo.isIs_conference());
     }
 
     /**
@@ -479,137 +351,63 @@ public class VoiceCallController {
     private void handleCallAccepted(Voice_info voiceInfo) {
         int callId = voiceInfo.getCall_id();
         VoiceCallView callView = activeCallViews.get(callId);
-
-        // 获取当前用户名
+        if (callView == null) return;
+        
         String currentUsername = model.getCurrentUser();
         boolean isInitiator = voiceInfo.getFrom_username().equals(currentUsername);
 
-        System.out.println("处理通话接受: " +
-                "当前用户=" + currentUsername +
-                ", 呼叫方=" + voiceInfo.getFrom_username() +
-                ", 是否为发起方=" + isInitiator +
-                ", 主机=" + voiceInfo.getHost() +
-                ", 端口=" + voiceInfo.getPort());
+        // 更新UI状态
+        callView.updateCallStatus(Voice_info.CallStatus.CONNECTING);
 
-        if (callView != null) {
-            // 更新UI状态
-            callView.updateCallStatus(Voice_info.CallStatus.CONNECTING);
-
-            // 如果是呼叫发起方，需要获取被呼叫方的主机信息
-            if (isInitiator) {
-                // 检查是否已有远程主机信息
-                if (voiceInfo.getHost() != null && !voiceInfo.getHost().isEmpty()) {
-                    // 保存远程主机信息
-                    String remoteHost = voiceInfo.getHost();
-                    int remotePort = voiceInfo.getPort();
-                    
-                    System.out.println("保存远程主机信息: " +
-                            "通话ID=" + callId +
-                            ", 远程主机=" + remoteHost +
-                            ", 远程端口=" + remotePort);
-                    
-                    // 检查音频流是否已启动
-                    if (!audioStreamManagers.containsKey(callId)) {
-                        // 创建一个临时的Voice_info对象，包含正确的远程主机信息
-                        Voice_info tempInfo = new Voice_info();
-                        tempInfo.setCall_id(callId);
-                        tempInfo.setConference_id(voiceInfo.getConference_id());
-                        tempInfo.setFrom_username(voiceInfo.getFrom_username());
-                        tempInfo.setIs_conference(voiceInfo.isIs_conference());
-                        tempInfo.setCallType(voiceInfo.getCallType());
-                        tempInfo.setStatus(voiceInfo.getStatus());
-                        
-                        // 设置本地主机信息
-                        String localHost = getLocalIpAddress();
-                        int localPort = BASE_PORT + callId % 1000;
-                        tempInfo.setHost(localHost);
-                        tempInfo.setPort(localPort);
-                        
-                        // 保存远程主机信息到pendingRemoteEndpoints
-                        if (pendingRemoteEndpoints == null) {
-                            pendingRemoteEndpoints = new HashMap<>();
-                        }
-                        
-                        Voice_info remoteInfo = new Voice_info();
-                        remoteInfo.setCall_id(callId);
-                        remoteInfo.setHost(remoteHost);
-                        remoteInfo.setPort(remotePort);
-                        pendingRemoteEndpoints.put(callId, remoteInfo);
-                        
-                        // 开始音频流，使用临时对象
-                        startAudioStream(tempInfo);
-                    } else {
-                        System.out.println("音频流已启动，无需重复创建");
-                        
-                        // 更新远程主机信息
-                        AudioStreamManager streamManager = audioStreamManagers.get(callId);
-                        if (streamManager != null) {
-                            streamManager.setRemoteEndpoint(remoteHost, remotePort);
-                            System.out.println("更新音频流的远程端点: " +
-                                    "通话ID=" + callId +
-                                    ", 远程主机=" + remoteHost +
-                                    ", 远程端口=" + remotePort);
-                        }
-                    }
-                } else {
-                    System.err.println("通话被接受，但未收到远程主机信息");
+        if (isInitiator) {
+            // 保存远程主机信息
+            String remoteHost = voiceInfo.getHost();
+            int remotePort = voiceInfo.getPort();
+            
+            if (remoteHost != null && !remoteHost.isEmpty()) {
+                // 保存远程主机信息
+                if (pendingRemoteEndpoints == null) {
+                    pendingRemoteEndpoints = new HashMap<>();
                 }
-            } else {
-                // 如果是被呼叫方，需要设置自己的主机信息并启动音频流
-                try {
-                    // 检查是否有保存的远程主机信息
-                    if (pendingRemoteEndpoints != null && pendingRemoteEndpoints.containsKey(callId)) {
-                        Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
-                        String remoteHost = remoteInfo.getHost();
-                        int remotePort = remoteInfo.getPort();
-
-                        System.out.println("使用保存的远程主机信息: " +
-                                "远程主机=" + remoteHost +
-                                ", 远程端口=" + remotePort);
-
-                        // 设置远程主机信息
-                        voiceInfo.setHost(remoteHost);
-                        voiceInfo.setPort(remotePort);
-                    }
-
-                    // 检查音频流是否已启动
-                    if (!audioStreamManagers.containsKey(callId)) {
-                        // 开始音频流
-                        startAudioStream(voiceInfo);
-
-                        // 发送连接成功消息
-                        Voice_info connectedInfo = new Voice_info();
-                        connectedInfo.setCall_id(callId);
-                        connectedInfo.setConference_id(voiceInfo.getConference_id());
-                        connectedInfo.setFrom_username(currentUsername);
-                        connectedInfo.setIs_conference(voiceInfo.isIs_conference());
-                        connectedInfo.setCallType(voiceInfo.getCallType());
-                        connectedInfo.setStatus(Voice_info.CallStatus.CONNECTED);
-
-                        // 获取本地主机和端口
-                        String localHost = getLocalIpAddress();
-                        int localPort = BASE_PORT + callId % 1000;
-                        connectedInfo.setHost(localHost);
-                        connectedInfo.setPort(localPort);
-
-                        // 添加参与者
-                        connectedInfo.addParticipant(voiceInfo.getFrom_username());
-
-                        // 发送连接成功消息
-                        sendVoiceCallMessage(connectedInfo);
-                    } else {
-                        System.out.println("音频流已启动，无需重复创建");
-                    }
-
-                } catch (Exception e) {
-                    System.err.println("设置本地主机信息失败: " + e.getMessage());
-                    e.printStackTrace();
-                }
+                
+                Voice_info remoteInfo = new Voice_info();
+                remoteInfo.setCall_id(callId);
+                remoteInfo.setHost(remoteHost);
+                remoteInfo.setPort(remotePort);
+                pendingRemoteEndpoints.put(callId, remoteInfo);
+                
+                // 开始音频流
+                startAudioStream(voiceInfo);
+            }
+        } else {
+            // 检查是否有保存的远程主机信息
+            if (pendingRemoteEndpoints != null && pendingRemoteEndpoints.containsKey(callId)) {
+                Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
+                voiceInfo.setHost(remoteInfo.getHost());
+                voiceInfo.setPort(remoteInfo.getPort());
             }
 
-            // 更新通话信息
-            callView.setVoiceInfo(voiceInfo);
+            // 开始音频流
+            startAudioStream(voiceInfo);
+
+            // 发送连接成功消息
+            Voice_info connectedInfo = new Voice_info();
+            connectedInfo.setCall_id(callId);
+            connectedInfo.setConference_id(voiceInfo.getConference_id());
+            connectedInfo.setFrom_username(currentUsername);
+            connectedInfo.setIs_conference(voiceInfo.isIs_conference());
+            connectedInfo.setCallType(voiceInfo.getCallType());
+            connectedInfo.setStatus(Voice_info.CallStatus.CONNECTED);
+            connectedInfo.setHost(voiceInfo.getHost());
+            connectedInfo.setPort(voiceInfo.getPort());
+            connectedInfo.addParticipant(voiceInfo.getFrom_username());
+
+            // 发送连接成功消息
+            sendVoiceCallMessage(connectedInfo);
         }
+
+        // 更新通话信息
+        callView.setVoiceInfo(voiceInfo);
     }
 
     /**
@@ -619,21 +417,18 @@ public class VoiceCallController {
     private void handleCallRejected(Voice_info voiceInfo) {
         int callId = voiceInfo.getCall_id();
         VoiceCallView callView = activeCallViews.get(callId);
+        if (callView == null) return;
 
-        if (callView != null) {
-            // 显示被拒绝信息
-            callView.showCallRejected();
-
-            // 延迟关闭窗口
-            Timer timer = new Timer();
-            timer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    callView.dispose();
-                    activeCallViews.remove(callId);
-                }
-            }, 3000);
-        }
+        // 显示被拒绝信息并延迟关闭
+        callView.showCallRejected();
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                callView.dispose();
+                activeCallViews.remove(callId);
+            }
+        }, 2000);
     }
 
     /**
@@ -643,37 +438,24 @@ public class VoiceCallController {
     private void handleCallEnded(Voice_info voiceInfo) {
         int callId = voiceInfo.getCall_id();
         
-        System.out.println("收到通话结束消息: 通话ID=" + callId + 
-                ", 发送方=" + voiceInfo.getFrom_username() + 
-                ", 参与者=" + voiceInfo.getParticipants());
-
         // 停止音频流
         stopAudioStream(callId);
 
         // 关闭通话窗口
         VoiceCallView callView = activeCallViews.get(callId);
         if (callView != null) {
-            // 更新通话信息
-            callView.setVoiceInfo(voiceInfo);
             callView.showCallEnded();
-            
-            System.out.println("通话已结束: 通话ID=" + callId);
-
-            // 延迟关闭窗口
             Timer timer = new Timer();
             timer.schedule(new TimerTask() {
                 @Override
                 public void run() {
                     callView.dispose();
                     activeCallViews.remove(callId);
-                    System.out.println("通话窗口已关闭: 通话ID=" + callId);
                 }
-            }, 3000);
-        } else {
-            System.err.println("无法找到通话ID为 " + callId + " 的通话视图，可能已关闭");
+            }, 2000);
         }
         
-        // 清理相关资源
+        // 清理资源
         if (pendingRemoteEndpoints != null) {
             pendingRemoteEndpoints.remove(callId);
         }
@@ -686,51 +468,26 @@ public class VoiceCallController {
     private void handleCallConnected(Voice_info voiceInfo) {
         int callId = voiceInfo.getCall_id();
         VoiceCallView callView = activeCallViews.get(callId);
+        if (callView == null) return;
 
-        // 获取当前用户名
         String currentUsername = model.getCurrentUser();
         boolean isInitiator = voiceInfo.getFrom_username().equals(currentUsername);
 
-        System.out.println("处理通话连接: " +
-                "当前用户=" + currentUsername +
-                ", 呼叫方=" + voiceInfo.getFrom_username() +
-                ", 是否为发起方=" + isInitiator +
-                ", 主机=" + voiceInfo.getHost() +
-                ", 端口=" + voiceInfo.getPort());
+        // 更新UI状态
+        callView.updateCallStatus(Voice_info.CallStatus.CONNECTED);
 
-        if (callView != null) {
-            // 更新UI状态
-            callView.updateCallStatus(Voice_info.CallStatus.CONNECTED);
-
-            // 检查音频流是否已启动
-            AudioStreamManager streamManager = audioStreamManagers.get(callId);
-            if (streamManager == null) {
-                // 如果音频流尚未启动，则启动它
-                try {
-                    // 如果是对方发送的CONNECTED消息，且当前用户不是发起方，则启动音频流
-                    // 如果当前用户是发起方，则应该已经在ACCEPTED阶段启动了音频流
-                    if (!isInitiator && !voiceInfo.getFrom_username().equals(currentUsername)) {
-                        startAudioStream(voiceInfo);
-                    }
-                } catch (Exception e) {
-                    System.err.println("启动音频流失败: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            } else {
-                System.out.println("音频流已启动，无需重复创建");
-            }
-
-            // 更新通话信息
-            callView.setVoiceInfo(voiceInfo);
-
-            // 开始计时
-            callView.startDurationTimer();
-
-            // 输出连接信息
-            System.out.println("通话已连接: ID=" + callId +
-                    ", 远程主机=" + voiceInfo.getHost() +
-                    ", 远程端口=" + voiceInfo.getPort());
+        // 检查音频流是否已启动
+        if (!audioStreamManagers.containsKey(callId)) {
+            startAudioStream(voiceInfo);
         }
+
+        // 更新通话信息
+        callView.setVoiceInfo(voiceInfo);
+
+        // 开始计时
+        callView.startDurationTimer();
+
+        System.out.println("通话已连接: ID=" + callId);
     }
 
     /**
@@ -740,21 +497,20 @@ public class VoiceCallController {
     private void handleCallError(Voice_info voiceInfo) {
         int callId = voiceInfo.getCall_id();
         VoiceCallView callView = activeCallViews.get(callId);
+        if (callView == null) return;
 
-        if (callView != null) {
-            // 显示错误信息
-            callView.showCallError(voiceInfo);
+        // 显示错误信息
+        callView.showCallError(voiceInfo);
 
-            // 延迟关闭窗口
-            Timer timer = new Timer();
-            timer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    callView.dispose();
-                    activeCallViews.remove(callId);
-                }
-            }, 3000);
-        }
+        // 延迟关闭窗口
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                callView.dispose();
+                activeCallViews.remove(callId);
+            }
+        }, 2000);
     }
 
     /**
@@ -766,20 +522,13 @@ public class VoiceCallController {
 
         // 检查是否已有该通话的视图
         if (activeCallViews.containsKey(callId)) {
-            System.out.println("通话ID为 " + callId + " 的通话视图已存在");
             return;
         }
 
-        // 获取当前用户名
         String currentUsername = model.getCurrentUser();
         boolean isInitiator = voiceInfo.getFrom_username().equals(currentUsername);
 
-        System.out.println("创建" + (isInitiator ? "呼出" : "来电") + "界面: " +
-                "通话ID=" + callId +
-                ", 当前用户=" + currentUsername +
-                ", 呼叫方=" + voiceInfo.getFrom_username());
-
-        // 创建通话视图，传递当前用户名
+        // 创建通话视图
         VoiceCallView callView = new VoiceCallView(this, voiceInfo, currentUsername);
         activeCallViews.put(callId, callView);
 
@@ -796,42 +545,25 @@ public class VoiceCallController {
 
         // 检查是否已经有音频流管理器
         if (audioStreamManagers.containsKey(callId)) {
-            System.out.println("通话ID为 " + callId + " 的音频流已存在，无需重复创建");
             return;
         }
 
         try {
-            // 为每个通话创建唯一的本地端口
+            // 设置本地端口
             int localPort = BASE_PORT + callId % 1000;
-            int maxRetries = 5;
-            int retryCount = 0;
-            boolean portAvailable = false;
-
+            
             // 尝试找到可用端口
-            while (!portAvailable && retryCount < maxRetries) {
+            while (true) {
                 try {
-                    // 测试端口是否可用
-                    java.net.DatagramSocket testSocket = new java.net.DatagramSocket(localPort);
-                    testSocket.close();
-                    portAvailable = true;
+                    new java.net.DatagramSocket(localPort).close();
+                    break; // 端口可用
                 } catch (java.net.BindException e) {
-                    // 端口被占用，尝试下一个端口
-                    System.out.println("端口 " + localPort + " 已被占用，尝试下一个端口");
-                    localPort++;
-                    retryCount++;
+                    localPort++; // 尝试下一个端口
                 }
             }
-
-            if (!portAvailable) {
-                throw new java.net.BindException("无法找到可用的UDP端口");
-            }
-
-            // 设置本地IP地址
+            
+            // 获取本地IP地址
             String localHost = getLocalIpAddress();
-
-            // 获取当前用户名
-            String currentUsername = model.getCurrentUser();
-            boolean isInitiator = voiceInfo.getFrom_username().equals(currentUsername);
 
             // 获取远程主机信息
             String remoteHost = voiceInfo.getHost();
@@ -839,55 +571,24 @@ public class VoiceCallController {
 
             // 检查是否需要从pendingRemoteEndpoints获取远程主机信息
             if ((remoteHost == null || remoteHost.isEmpty() || remotePort == 0) && 
-                pendingRemoteEndpoints != null && pendingRemoteEndpoints.containsKey(callId)) {
+                pendingRemoteEndpoints != null && 
+                pendingRemoteEndpoints.containsKey(callId)) {
+                
                 Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
                 remoteHost = remoteInfo.getHost();
                 remotePort = remoteInfo.getPort();
-                
-                System.out.println("使用保存的远程主机信息: " +
-                        "通话ID=" + callId +
-                        ", 远程主机=" + remoteHost +
-                        ", 远程端口=" + remotePort);
             }
 
-            System.out.println("启动音频流: " +
-                    "当前用户=" + currentUsername +
-                    ", 呼叫方=" + voiceInfo.getFrom_username() +
-                    ", 是否为发起方=" + isInitiator +
-                    ", 本地主机=" + localHost +
-                    ", 本地端口=" + localPort +
-                    ", 远程主机=" + remoteHost +
-                    ", 远程端口=" + remotePort);
-
-            // 检查是否已有远程主机信息
-            if (remoteHost == null || remoteHost.isEmpty()) {
-                System.err.println("远程主机地址未设置，无法启动音频流");
-                return; // 无法启动音频流
-            }
-            
-            // 尝试解析远程主机地址，验证其有效性
-            try {
-                java.net.InetAddress remoteAddr = java.net.InetAddress.getByName(remoteHost);
-                System.out.println("远程主机地址解析成功: " + remoteAddr.getHostAddress());
-                
-                // 检查是否可以连接到远程主机
-                try {
-                    java.net.Socket testSocket = new java.net.Socket();
-                    testSocket.connect(new java.net.InetSocketAddress(remoteHost, remotePort), 1000);
-                    testSocket.close();
-                    System.out.println("成功连接到远程主机: " + remoteHost + ":" + remotePort);
-                } catch (Exception e) {
-                    System.out.println("无法连接到远程主机: " + e.getMessage() + "，但将继续尝试UDP通信");
-                }
-            } catch (Exception e) {
-                System.err.println("无法解析远程主机地址: " + e.getMessage());
-                // 继续尝试，因为有些环境下解析可能失败但UDP通信仍然可行
-            }
+            System.out.println("启动音频流: 本地端口=" + localPort + ", 远程=" + remoteHost + ":" + remotePort);
 
             // 创建音频流管理器
             AudioStreamManager streamManager = new AudioStreamManager(localPort);
-            streamManager.initialize(); // 先初始化socket
-            streamManager.setRemoteEndpoint(remoteHost, remotePort); // 然后设置远程端点
+            streamManager.initialize();
+            
+            // 设置远程端点
+            if (remoteHost != null && !remoteHost.isEmpty() && remotePort > 0) {
+                streamManager.setRemoteEndpoint(remoteHost, remotePort);
+            }
 
             // 注册通话ID到音频播放服务
             playbackService.registerCall(callId);
@@ -896,26 +597,16 @@ public class VoiceCallController {
             streamManager.addListener("default", new AudioStreamManager.AudioStreamListener() {
                 @Override
                 public void onAudioDataReceived(byte[] audioData) {
-                    // 添加日志记录接收到的音频数据
-                    System.out.println("接收到音频数据: 通话ID=" + callId + 
-                                      ", 数据大小=" + audioData.length + " 字节" +
-                                      ", 时间戳=" + System.currentTimeMillis());
-                    
-                    // 将接收到的音频数据发送到播放服务，并关联通话ID
+                    // 将音频数据发送到播放服务
                     playbackService.queueAudio(audioData, callId);
                 }
             });
 
             // 开始接收
             streamManager.startReceiving();
-            System.out.println("开始接收音频数据: 通话ID=" + callId + 
-                              ", 本地端口=" + localPort);
-
+            
             // 开始发送
             streamManager.startSending(null);
-            System.out.println("开始发送音频数据: 通话ID=" + callId + 
-                              ", 远程主机=" + remoteHost + 
-                              ", 远程端口=" + remotePort);
 
             // 保存音频流管理器
             audioStreamManagers.put(callId, streamManager);
@@ -926,60 +617,15 @@ public class VoiceCallController {
                 callView.updateCallStatus(Voice_info.CallStatus.CONNECTED);
             }
 
-            // 如果是发起方，发送连接成功消息
-            if (isInitiator) {
-                Voice_info connectedInfo = new Voice_info();
-                connectedInfo.setCall_id(callId);
-                connectedInfo.setConference_id(voiceInfo.getConference_id());
-                connectedInfo.setFrom_username(currentUsername);
-                connectedInfo.setIs_conference(voiceInfo.isIs_conference());
-                connectedInfo.setCallType(voiceInfo.getCallType());
-                connectedInfo.setStatus(Voice_info.CallStatus.CONNECTED);
-                connectedInfo.setHost(localHost);
-                connectedInfo.setPort(localPort);
-
-                // 添加参与者
-                for (String participant : voiceInfo.getParticipants()) {
-                    connectedInfo.addParticipant(participant);
-                }
-
-                // 发送连接成功消息
-                sendVoiceCallMessage(connectedInfo);
-            }
-
-            System.out.println("音频流启动成功: " +
-                    "通话ID=" + callId +
-                    ", 本地端口=" + localPort +
-                    ", 远程主机=" + remoteHost +
-                    ", 远程端口=" + remotePort);
-
-            // 发送测试音频数据，验证连接
-            new Thread(() -> {
-                try {
-                    System.out.println("发送测试音频数据...");
-                    Thread.sleep(1000);
-                    byte[] testData = new byte[128];
-                    // 填充一些数据
-                    for (int i = 0; i < testData.length; i++) {
-                        testData[i] = (byte)(i % 256);
-                    }
-                    streamManager.sendAudioData(testData, 0, testData.length);
-                    System.out.println("测试音频数据已发送");
-                } catch (Exception e) {
-                    System.err.println("发送测试音频数据失败: " + e.getMessage());
-                }
-            }).start();
-
         } catch (Exception e) {
             System.err.println("创建音频流失败: " + e.getMessage());
-            e.printStackTrace();
 
             // 更新UI状态
             VoiceCallView callView = activeCallViews.get(callId);
             if (callView != null) {
                 Voice_info errorInfo = new Voice_info();
                 errorInfo.setCall_id(callId);
-                errorInfo.setError("创建音频流失败: " + e.getMessage());
+                errorInfo.setError("创建音频流失败");
                 callView.showCallError(errorInfo);
             }
         }
@@ -991,44 +637,14 @@ public class VoiceCallController {
      */
     private String getLocalIpAddress() {
         try {
-            // 显示所有网络接口信息，便于调试
-            System.out.println("========= 网络接口信息 =========");
-            java.util.Enumeration<java.net.NetworkInterface> interfaces = java.net.NetworkInterface.getNetworkInterfaces();
+            // 尝试不同方法获取非回环IPv4地址
+            List<String> allIPs = new ArrayList<>();
+            
+            java.util.Enumeration<java.net.NetworkInterface> interfaces = 
+                java.net.NetworkInterface.getNetworkInterfaces();
+            
             while (interfaces.hasMoreElements()) {
                 java.net.NetworkInterface iface = interfaces.nextElement();
-                System.out.println("接口: " + iface.getDisplayName() + 
-                                  ", 名称: " + iface.getName() + 
-                                  ", 状态: " + (iface.isUp() ? "启用" : "禁用") + 
-                                  ", 回环: " + iface.isLoopback() + 
-                                  ", 虚拟: " + iface.isVirtual());
-                
-                java.util.Enumeration<java.net.InetAddress> addresses = iface.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    java.net.InetAddress addr = addresses.nextElement();
-                    System.out.println("  地址: " + addr.getHostAddress() + 
-                                      ", IPv4: " + (addr instanceof java.net.Inet4Address) + 
-                                      ", 回环: " + addr.isLoopbackAddress());
-                }
-            }
-            System.out.println("===============================");
-            
-            // 尝试方法1: 通过Socket连接获取本地IP
-            try {
-                java.net.Socket socket = new java.net.Socket();
-                socket.connect(new java.net.InetSocketAddress("8.8.8.8", 53), 1000);
-                String ip = socket.getLocalAddress().getHostAddress();
-                socket.close();
-                System.out.println("通过Socket获取IP地址: " + ip);
-                return ip;
-            } catch (Exception e) {
-                System.out.println("Socket方法获取IP失败: " + e.getMessage());
-            }
-            
-            // 尝试方法2: 获取非回环地址
-            interfaces = java.net.NetworkInterface.getNetworkInterfaces();
-            while (interfaces.hasMoreElements()) {
-                java.net.NetworkInterface iface = interfaces.nextElement();
-                // 跳过禁用的接口
                 if (!iface.isUp() || iface.isLoopback() || iface.isVirtual()) {
                     continue;
                 }
@@ -1036,42 +652,22 @@ public class VoiceCallController {
                 java.util.Enumeration<java.net.InetAddress> addresses = iface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     java.net.InetAddress addr = addresses.nextElement();
-                    // 只考虑IPv4地址
                     if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
-                        String ip = addr.getHostAddress();
-                        System.out.println("找到本地IP地址: " + ip);
-                        return ip;
+                        allIPs.add(addr.getHostAddress());
                     }
                 }
             }
             
-            // 尝试方法3: 获取本地主机地址
-            java.net.InetAddress localHost = java.net.InetAddress.getLocalHost();
-            String ip = localHost.getHostAddress();
-            System.out.println("使用本地主机地址: " + ip);
-            
-            // 检查是否是回环地址，如果是则尝试其他方法
-            if (ip.startsWith("127.")) {
-                System.out.println("警告: 获取到的是回环地址，尝试获取外部IP地址");
-                
-                // 尝试方法4: 使用本地主机名解析
-                String hostName = localHost.getHostName();
-                java.net.InetAddress[] allAddrs = java.net.InetAddress.getAllByName(hostName);
-                for (java.net.InetAddress addr : allAddrs) {
-                    if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
-                        ip = addr.getHostAddress();
-                        System.out.println("通过主机名解析获取IP: " + ip);
-                        return ip;
-                    }
-                }
+            // 优先使用非回环地址
+            if (!allIPs.isEmpty()) {
+                return allIPs.get(0);
             }
             
-            return ip;
+            // 备选方案
+            return java.net.InetAddress.getLocalHost().getHostAddress();
         } catch (Exception e) {
-            System.err.println("获取本地IP地址失败: " + e.getMessage());
-            e.printStackTrace();
-            System.out.println("使用默认地址: 0.0.0.0");
-            return "0.0.0.0"; // 使用通配地址，可能对某些环境更友好
+            // 默认IP
+            return "127.0.0.1";
         }
     }
 
@@ -1080,27 +676,20 @@ public class VoiceCallController {
      * @param callId 通话ID
      */
     private void stopAudioStream(int callId) {
-        System.out.println("停止音频流: 通话ID=" + callId);
-        
         try {
+            // 关闭音频流管理器
             AudioStreamManager streamManager = audioStreamManagers.get(callId);
             if (streamManager != null) {
-                // 关闭音频流管理器
                 streamManager.close();
                 audioStreamManagers.remove(callId);
-                System.out.println("音频流已关闭: 通话ID=" + callId);
-            } else {
-                System.out.println("未找到音频流管理器: 通话ID=" + callId);
             }
             
-            // 确保释放所有相关资源
+            // 停止音频播放
             if (playbackService != null) {
                 playbackService.stopPlaybackForCall(callId);
-                System.out.println("已停止音频播放: 通话ID=" + callId);
             }
         } catch (Exception e) {
-            System.err.println("停止音频流时发生错误: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("停止音频流时出错: " + e.getMessage());
         }
     }
 
@@ -1112,7 +701,6 @@ public class VoiceCallController {
         encap_info encapInfo = new encap_info();
         encapInfo.set_type(8);
         encapInfo.set_voice_info(voiceInfo);
-
         messageSender.sendVoiceCallMessage(encapInfo);
     }
 
@@ -1131,3 +719,4 @@ public class VoiceCallController {
         }
     }
 }
+

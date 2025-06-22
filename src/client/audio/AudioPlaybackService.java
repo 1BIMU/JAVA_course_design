@@ -67,31 +67,23 @@ public class AudioPlaybackService {
         // 获取音频线路
         DataLine.Info info = new DataLine.Info(SourceDataLine.class, audioFormat);
         if (!AudioSystem.isLineSupported(info)) {
-            throw new LineUnavailableException("不支持的音频格式: " + audioFormat);
+            throw new LineUnavailableException("不支持的音频格式");
         }
 
         try {
             line = (SourceDataLine) AudioSystem.getLine(info);
             line.open(audioFormat);
             line.start();
-            System.out.println("音频播放服务启动成功: 缓冲区大小=" + line.getBufferSize() + " 字节");
+            System.out.println("音频播放服务已启动");
         } catch (LineUnavailableException e) {
             System.err.println("音频线路不可用: " + e.getMessage());
-            e.printStackTrace();
             throw e;
         }
 
         running.set(true);
 
         // 在单独的线程中处理音频播放
-        executor.submit(() -> {
-            try {
-                playAudioFromQueue();
-            } catch (Exception e) {
-                System.err.println("音频播放线程出错: " + e.getMessage());
-                e.printStackTrace();
-            }
-        });
+        executor.submit(this::playAudioFromQueue);
     }
 
     /**
@@ -111,71 +103,39 @@ public class AudioPlaybackService {
      * 从队列播放音频数据
      */
     private void playAudioFromQueue() {
-        byte[] buffer = new byte[4096]; // 4K 缓冲区
-        int totalBytesPlayed = 0;
-        int audioChunksPlayed = 0;
-        long startTime = System.currentTimeMillis();
-
         try {
-            System.out.println("音频播放线程启动");
-            
             while (running.get()) {
                 try {
                     // 从队列获取音频数据
                     byte[] audioData = audioDataQueue.take();
 
-                    // 添加日志记录播放的音频数据
-                    totalBytesPlayed += audioData.length;
-                    audioChunksPlayed++;
-                    
-                    // 每10个音频块记录一次，或者每5秒记录一次
-                    if (audioChunksPlayed % 10 == 0 || System.currentTimeMillis() - startTime > 5000) {
-                        System.out.println("正在播放音频数据: 大小=" + audioData.length + 
-                                          " 字节, 累计播放=" + totalBytesPlayed + 
-                                          " 字节, 块数=" + audioChunksPlayed +
-                                          ", 队列大小=" + audioDataQueue.size());
-                        startTime = System.currentTimeMillis();
-                    }
-
                     // 检查线路状态，如果关闭则重新打开
                     if (line == null || !line.isOpen() || !line.isActive()) {
-                        System.out.println("音频线路未打开或未激活，尝试重新打开");
                         try {
                             if (line != null) {
                                 line.close();
                             }
                             
                             DataLine.Info info = new DataLine.Info(SourceDataLine.class, audioFormat);
-                            if (!AudioSystem.isLineSupported(info)) {
-                                throw new LineUnavailableException("不支持的音频格式: " + audioFormat);
-                            }
-                            
                             line = (SourceDataLine) AudioSystem.getLine(info);
                             line.open(audioFormat);
                             line.start();
-                            System.out.println("音频线路重新打开成功");
                         } catch (Exception e) {
-                            System.err.println("重新打开音频线路失败: " + e.getMessage());
-                            e.printStackTrace();
+                            System.err.println("重新打开音频线路失败");
                             continue; // 跳过这个音频数据
                         }
                     }
 
                     // 播放音频数据
                     try {
-                        int written = line.write(audioData, 0, audioData.length);
-                        if (written != audioData.length) {
-                            System.out.println("警告: 写入的音频数据不完整，预期=" + audioData.length + 
-                                              ", 实际写入=" + written);
-                        }
+                        line.write(audioData, 0, audioData.length);
                         
                         // 确保数据被播放出来
                         if (!line.isRunning()) {
                             line.start();
                         }
                     } catch (Exception e) {
-                        System.err.println("播放音频数据时出错: " + e.getMessage());
-                        e.printStackTrace();
+                        System.err.println("播放音频数据时出错");
                         
                         // 尝试重新初始化音频线路
                         try {
@@ -187,10 +147,8 @@ public class AudioPlaybackService {
                             line = (SourceDataLine) AudioSystem.getLine(info);
                             line.open(audioFormat);
                             line.start();
-                            System.out.println("音频线路重新初始化成功");
                         } catch (Exception e2) {
-                            System.err.println("重新初始化音频线路失败: " + e2.getMessage());
-                            e2.printStackTrace();
+                            System.err.println("重新初始化音频线路失败");
                         }
                     }
 
@@ -199,13 +157,8 @@ public class AudioPlaybackService {
                     break;
                 }
             }
-            
-            System.out.println("音频播放线程结束: 共播放 " + audioChunksPlayed + " 个音频块, " + 
-                              totalBytesPlayed + " 字节");
-            
         } catch (Exception e) {
             System.err.println("音频播放出错: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
@@ -214,9 +167,7 @@ public class AudioPlaybackService {
      * @param callId 通话ID
      */
     public void stopPlaybackForCall(int callId) {
-        // 将通话标记为非活动状态
         activeCallMap.remove(callId);
-        System.out.println("已停止通话ID " + callId + " 的音频播放");
     }
 
     /**
@@ -225,7 +176,6 @@ public class AudioPlaybackService {
      */
     public void registerCall(int callId) {
         activeCallMap.put(callId, true);
-        System.out.println("已注册通话ID " + callId + " 的音频播放");
     }
 
     /**
@@ -234,35 +184,36 @@ public class AudioPlaybackService {
      * @param callId 关联的通话ID
      */
     public void queueAudio(byte[] audioData, int callId) {
-        if (running.get() && audioData != null && audioData.length > 0) {
-            // 检查通话是否处于活动状态
-            if (activeCallMap.containsKey(callId)) {
-                // 添加日志记录收到的音频数据
-                System.out.println("音频数据入队: 通话ID=" + callId + 
-                                  ", 数据大小=" + audioData.length + 
-                                  " 字节, 队列大小=" + audioDataQueue.size() +
-                                  ", 时间戳=" + System.currentTimeMillis());
-                
-                // 检查队列大小，避免内存溢出
-                if (audioDataQueue.size() > 100) {
-                    System.out.println("警告: 音频队列过大，可能导致延迟，清除部分旧数据");
-                    audioDataQueue.clear(); // 清除所有旧数据
-                }
-                
-                audioDataQueue.offer(audioData.clone()); // 克隆数据，避免外部修改
-                
-                // 如果是首次接收到数据，播放一个提示音
-                if (audioDataQueue.size() == 1) {
-                    System.out.println("首次接收到音频数据，开始播放");
-                }
-            } else {
-                System.out.println("丢弃音频数据: 通话ID=" + callId + " 不在活动状态");
-            }
-        } else if (!running.get()) {
-            System.out.println("丢弃音频数据: 播放服务未运行");
-        } else if (audioData == null || audioData.length == 0) {
-            System.out.println("丢弃音频数据: 数据为空或长度为0");
+        if (!running.get() || audioData == null || audioData.length == 0) {
+            return;
         }
+            
+        // 检查通话是否处于活动状态
+        if (!activeCallMap.containsKey(callId)) {
+            return;
+        }
+
+        // 检查数据长度是否为帧大小的整数倍 (16位音频=2字节每帧)
+        if (audioData.length % 2 != 0) {
+            // 创建新数组，长度为偶数(向上取整)
+            int newLength = (audioData.length / 2) * 2 + 2;
+            byte[] adjustedData = new byte[newLength];
+            // 复制原始数据
+            System.arraycopy(audioData, 0, adjustedData, 0, audioData.length);
+            // 用0填充多余的字节
+            if (newLength > audioData.length) {
+                adjustedData[audioData.length] = 0;
+                adjustedData[audioData.length + 1] = 0;
+            }
+            audioData = adjustedData;
+        }
+        
+        // 检查队列大小，避免内存溢出
+        if (audioDataQueue.size() > 100) {
+            audioDataQueue.clear(); // 清除所有旧数据
+        }
+        
+        audioDataQueue.offer(audioData.clone()); // 克隆数据，避免外部修改
     }
 
     /**
