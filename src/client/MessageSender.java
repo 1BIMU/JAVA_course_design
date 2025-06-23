@@ -688,4 +688,32 @@ public class MessageSender {
 
         return IOStream.writeMessage(socket, encapInfo);
     }
+
+    public void sendOrgAckMessage(String fromUser,int groupId, int orgId) {
+        Org_info orgInfo = new Org_info();
+        orgInfo.setType(3);//同意邀请的信息
+        orgInfo.setGroup_id(groupId);
+        orgInfo.setOrg_id(orgId);
+        orgInfo.setSuccess(true);
+        orgInfo.setFromUser(fromUser);
+        IOStream.writeMessage(socket, orgInfo);
+    }
+    public void sendOrgUserManageMessage(int orgID,int groupID, String fromUser,ArrayList<String> added,ArrayList<String> removed) {
+        Org_info orgInfo = new Org_info();
+        orgInfo.setType(4);
+        orgInfo.setFromUser(fromUser);
+        orgInfo.setGroup_id(groupID);
+        orgInfo.setOrg_id(orgID);
+        orgInfo.setAdded_people(added);
+        orgInfo.setRemoved_people(removed);
+        IOStream.writeMessage(socket, orgInfo);
+    }
+    public void sendEstablishOrgMessage(ArrayList<String> members, String fromUser,int groupID) {
+        Org_info orgInfo = new Org_info();
+        orgInfo.setType(1);
+        orgInfo.setFromUser(fromUser);
+        orgInfo.setGroup_id(groupID);
+        orgInfo.setMembers(members);
+        IOStream.writeMessage(socket, orgInfo);
+    }
 }

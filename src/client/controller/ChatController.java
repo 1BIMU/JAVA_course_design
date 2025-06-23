@@ -13,6 +13,7 @@ import client.model.ClientModel;
 import client.view.ChatView;
 import info.Chat_info;
 import info.Group_info;
+import info.Org_info;
 import io.FileIO;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
@@ -454,7 +455,13 @@ public class ChatController {
             }
         }).start();
     }
-    
+
+    public void InviteAgreement(Org_info org_info) {
+        int org_id = org_info.getOrg_id();
+        int group_id = org_info.getGroup_id();
+        messageSender.sendOrgAckMessage(getCurrentUsername(), org_id, group_id);
+    }
+
     /**
      * 历史记录回调接口
      */

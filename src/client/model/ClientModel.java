@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import info.Chat_info;
 import info.Group_info;
+import info.Org_info;
 
 /*
     客户端数据模型，管理客户端的状态和数据
@@ -33,7 +34,9 @@ public class ClientModel {
     // 所有注册用户列表
     private ArrayList<String> allUsers;
     // 群组信息映射表 <群组ID, 群组信息>
-    private Map<Integer, Group_info> groups;   //TODO: 这里的具体逻辑待服务端实现
+    private Map<Integer, Group_info> groups;
+    // 小组信息映射表 <群组ID, 群组信息>
+    private Map<Integer, Org_info> orgs;//TODO: 这里的具体逻辑待服务端实现
     // 聊天消息历史记录
     private List<Chat_info> messageHistory;   //TODO:这里的具体逻辑待服务端实现
     // 最新的聊天消息
@@ -152,7 +155,19 @@ public class ClientModel {
     public Map<Integer, Group_info> getGroups() {
         return new HashMap<>(groups);
     }
-    
+
+    public void updateGOrg(Org_info orgInfo) {//更新小组信息
+        orgs.put(orgInfo.getOrg_id(), orgInfo);
+        notifyObservers(UpdateType.ORGANIZATIONS);
+    }
+
+    public void removeOrg(int orgId) {
+        groups.remove(orgId);
+        notifyObservers(UpdateType.ORGANIZATIONS);
+    }
+    public Map<Integer, Org_info> getOrgs() {
+        return new HashMap<>(orgs);
+    }
     /*
         添加聊天消息到历史记录
     */
@@ -299,6 +314,7 @@ public class ClientModel {
         USERS,         // 在线用户列表更新
         ALL_USERS,     // 所有注册用户列表更新
         GROUPS,        // 群组信息更新
+        ORGANIZATIONS, // 小组类型更新
         CHAT,          // 聊天消息更新
         LOGIN_STATUS,  // 登录状态更新
         ALL           // 全部更新
