@@ -11,14 +11,8 @@ import io.FileIO;
 import io.IOStream;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.net.Socket;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.Queue;
+import java.util.*;
 
 public class ServerController {
     Socket socket;
@@ -61,39 +55,86 @@ public class ServerController {
         this.current_user = clientLoginRequest.getUserName();
 
         // 2. 处理重复登录（踢出旧连接）
-        if (model.checkUserOnline(current_user, this.server.online_users)) {
-            // ... 此处省略您已有的、正确的踢人逻辑 ...
-            // 注意：踢人逻辑执行后，当前线程应该结束，不应再往下执行
+        boolean isAlreadyOnline = model.checkUserOnline(current_user, this.server.online_users);
+        if (isAlreadyOnline) {
+            ServerFrame.appendLog("用户 "+ current_user + " 已经在线，准备强制下线旧连接...");
+
+            // 查找旧的Socket和对应的处理器
+            Socket old_socket = server.userSocketMap.get(this.current_user);
+            ServerHandler oldHandler = server.SocketHandlerMap.get(old_socket);
+
+            if (old_socket != null) {
+                // 准备并发送“被踢下线”的通知
+                encap_info kickInfoEncap = new encap_info();
+                Login_info kickInfo = new Login_info();
+                kickInfo.setKicked(true); // 设置被踢下线标志
+                kickInfo.setLoginSuccessFlag(false); // 登录在旧设备上已失效
+                kickInfoEncap.set_type(3); // 同样使用登录消息类型
+                kickInfoEncap.set_login_info(kickInfo);
+                IOStream.writeMessage(old_socket, kickInfoEncap);
+                ServerFrame.appendLog("已向旧连接 " + old_socket.getRemoteSocketAddress() + " 发送被踢下线通知。");
+
+                // 清理旧的连接和映射关系
+                this.server.online_sockets.remove(old_socket);
+                this.server.userSocketMap.remove(this.current_user);
+                this.server.SocketHandlerMap.remove(old_socket);
+
+                // 关闭旧的Socket，这将导致对应的ServerHandler线程结束
+                try {
+                    old_socket.close();
+                    ServerFrame.appendLog("旧连接已成功关闭。");
+                } catch (IOException e) {
+                    ServerFrame.appendLog("关闭旧连接时出错: " + e.getMessage());
+                }
+            } else {
+                ServerFrame.appendLog("警告：用户 " + current_user + " 在线，但在Map中找不到旧Socket。");
+            }
         }
 
-        // 3. 准备【广播】给所有人的“上线通知”
-        // 创建一个【新的、干净的】Login_info 用于广播
+        // 3. 更新服务器状态，将新用户/连接加入
+        // 如果用户之前不在线，则加入在线列表
+        if (!isAlreadyOnline) {
+            server.add_online_user(current_user);
+        }
+        // 无论如何，都更新/添加用户的Socket映射和Handler映射
+        server.userSocketMap.put(current_user, socket);
+        server.online_sockets.add(socket);
+        // 注意：SocketHandlerMap 在 ServerHandler 构造时已添加，这里无需重复
+
+        ServerFrame.updateUserList(server.online_users);
+        ServerFrame.appendLog("用户 " + current_user + " 的新连接已确立。");
+
+        // 4. 向所有其他在线用户广播“上线”通知
         Login_info broadcastInfo = new Login_info();
         broadcastInfo.setUserName(current_user);
-        broadcastInfo.setLoginSuccessFlag(true); // 表示是上线通知
-        // 更新在线列表并加入通知
-        server.add_online_user(current_user);
-        ServerFrame.updateUserList(server.online_users);
-        broadcastInfo.setOnlineUsers(server.online_users);
+        broadcastInfo.setLoginSuccessFlag(true); // true代表上线
+        broadcastInfo.setOnlineUsers(new ArrayList<>(server.online_users)); // 发送最新的在线列表
         broadcastInfo.setAllUsers(allUsers);
 
         encap_info broadcastEncap = new encap_info();
         broadcastEncap.set_type(3);
         broadcastEncap.set_login_info(broadcastInfo);
-        ServerFrame.appendLog("向所有人广播 " + current_user + " 已上线...");
-        model.sendALL(broadcastEncap); // 广播这个干净的通知，而不是原始的INFO
 
-        // 4. 准备【只发给登录者本人】的详细数据回执
-        // 创建另一个【新的、干净的】Login_info 用于详细回执
+        // 使用一个新的model实例来发送广播，避免并发问题
+        ServerModel broadcastModel = new ServerModel(server);
+        // 创建一个副本，移除当前登录者自己，避免给自己发送“你已上线”的广播
+        ArrayList<String> otherOnlineUsers = new ArrayList<>(server.online_users);
+        otherOnlineUsers.remove(current_user);
+        broadcastModel.Send2Users(broadcastEncap, otherOnlineUsers);
+        ServerFrame.appendLog("已向其他在线用户广播 " + current_user + " 的上线状态。");
+
+
+        // 5. 准备【只发给当前新登录者】的详细数据回执
         Login_info detailedResponseInfo = new Login_info();
         detailedResponseInfo.setUserName(current_user);
         detailedResponseInfo.setLoginSuccessFlag(true);
-        detailedResponseInfo.setOnlineUsers(server.online_users);
+        detailedResponseInfo.setKicked(false); // 明确告知新设备没有被踢
+        detailedResponseInfo.setOnlineUsers(new ArrayList<>(server.online_users)); // 发送最新的在线列表
         detailedResponseInfo.setAllUsers(allUsers);
 
         // 添加群聊信息
         ArrayList<Integer> groups = fileIO.getGroupsByUser(current_user);
-        Map<Integer,ArrayList<String>> groupMap = model.groupMap(groups, fileIO);
+        Map<Integer, ArrayList<String>> groupMap = model.groupMap(groups, fileIO);
         Map<Integer, String> groupNameMap = new HashMap<>();
         for (Integer groupId : groups) {
             groupNameMap.put(groupId, fileIO.getGroupName(groupId));
@@ -102,7 +143,7 @@ public class ServerController {
         detailedResponseInfo.setGroupMap(groupMap);
         detailedResponseInfo.setGroupNameMap(groupNameMap);
 
-        // 添加小组信息
+        // 添加小组信息 (使用已修复的逻辑)
         FileIO fileio_org = new FileIO("users.dat", "orgs.dat");
         ArrayList<Org_info> userOrgs = fileio_org.getAllOrgsByUser(current_user);
         ArrayList<Integer> orgIDs = new ArrayList<>();
@@ -118,14 +159,10 @@ public class ServerController {
         detailedResponseInfo.setOrgNameMap(orgNameMap);
         ServerFrame.appendLog("为用户 " + current_user + " 同步 " + userOrgs.size() + " 个小组信息。");
 
-        // 5. 发送详细回执给当前登录者
+        // 6. 发送详细回执给当前登录者
         RETURN.set_login_info(detailedResponseInfo);
         RETURN.set_type(3);
         IOStream.writeMessage(socket, RETURN);
-
-        // 6. 更新服务器内部状态
-        server.userSocketMap.put(current_user, socket);
-        server.add_online_socket(socket);
 
         return true;
     }
