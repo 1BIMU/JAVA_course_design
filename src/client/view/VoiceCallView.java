@@ -37,8 +37,6 @@ public class VoiceCallView extends JFrame {
     private JButton acceptButton;
     // 拒绝/挂断按钮
     private JButton rejectButton;
-    // 静音按钮
-    private JToggleButton muteButton;
 
     /**
      * 构造函数
@@ -195,23 +193,6 @@ public class VoiceCallView extends JFrame {
             }
         });
 
-        // 创建静音按钮
-        muteButton = new JToggleButton("静音");
-        muteButton.setPreferredSize(new Dimension(100, 40));
-        muteButton.setEnabled(false);
-        muteButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                // TODO: 实现静音功能
-                boolean muted = muteButton.isSelected();
-                if (muted) {
-                    muteButton.setText("取消静音");
-                } else {
-                    muteButton.setText("静音");
-                }
-            }
-        });
-
         // 根据通话状态添加按钮
         if (voiceInfo.getStatus() == Voice_info.CallStatus.REQUESTING) {
             // 判断是否为呼叫发起方
@@ -230,7 +211,6 @@ public class VoiceCallView extends JFrame {
             // 如果通话已连接，显示挂断和静音按钮
             rejectButton.setText("挂断");
             panel.add(rejectButton);
-            panel.add(muteButton);
         }
 
         return panel;
@@ -317,11 +297,9 @@ public class VoiceCallView extends JFrame {
         // 移除所有按钮
         actionPanel.removeAll();
 
-        // 添加挂断和静音按钮
+        // 添加挂断
         rejectButton.setText("挂断");
-        muteButton.setEnabled(true);
         actionPanel.add(rejectButton);
-        actionPanel.add(muteButton);
 
         // 刷新面板
         actionPanel.revalidate();
@@ -334,7 +312,6 @@ public class VoiceCallView extends JFrame {
     private void disableAllButtons() {
         acceptButton.setEnabled(false);
         rejectButton.setEnabled(false);
-        muteButton.setEnabled(false);
     }
 
     /**

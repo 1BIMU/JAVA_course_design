@@ -453,6 +453,11 @@ public class ServerController {
         String fromUsername = voiceInfo.getFrom_username();
         ServerFrame.appendLog("接收到语音通话请求: 来自用户 " + fromUsername);
 
+        // 获取当前客户端的真实IP地址并设置到Voice_info中
+        String clientRealIP = socket.getInetAddress().getHostAddress();
+        voiceInfo.setServerDetectedHost(clientRealIP);
+        ServerFrame.appendLog("检测到用户 " + fromUsername + " 的真实IP地址: " + clientRealIP);
+
         // 转发语音通话消息给目标用户
         List<String> participants = voiceInfo.getParticipants();
         if (participants != null && !participants.isEmpty()) {
@@ -460,9 +465,9 @@ public class ServerController {
                 // 获取目标用户的Socket
                 Socket targetSocket = server.getSocketByUsername(participant);
                 if (targetSocket != null && !targetSocket.isClosed()) {
-                    // 转发语音通话消息
+                    // 转发语音通话消息(包含发送方的真实IP)
                     IOStream.writeMessage(targetSocket, INFO);
-                    ServerFrame.appendLog("转发语音通话消息到用户: " + participant);
+                    ServerFrame.appendLog("转发语音通话消息到用户: " + participant + ", 包含发送方真实IP: " + clientRealIP);
                 } else {
                     // 目标用户不在线，发送错误响应给发起者
                     ServerFrame.appendLog("用户 " + participant + " 不在线，无法接收语音通话");

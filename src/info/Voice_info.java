@@ -25,14 +25,14 @@ public class Voice_info implements Serializable {
     private CallStatus status;
     // 通话类型
     private CallType callType;
-    // 主机地址
+    // 主机地址（客户端填写的本地地址）
     private String host;
+    // 服务端检测到的客户端IP地址
+    private String serverDetectedHost;
     // 端口号
     private int port;
     // 错误消息
     private String error_message;
-    // 额外信息（用于存储多个IP地址等辅助信息）
-    private Object extra;
 
     /**
      * 通话状态枚举
@@ -158,6 +158,14 @@ public class Voice_info implements Serializable {
         this.host = host;
     }
 
+    public String getServerDetectedHost() {
+        return serverDetectedHost;
+    }
+
+    public void setServerDetectedHost(String serverDetectedHost) {
+        this.serverDetectedHost = serverDetectedHost;
+    }
+
     public int getPort() {
         return port;
     }
@@ -172,13 +180,5 @@ public class Voice_info implements Serializable {
 
     public void setError_message(String error_message) {
         this.error_message = error_message;
-    }
-    
-    public Object getExtra() {
-        return extra;
-    }
-
-    public void setExtra(Object extra) {
-        this.extra = extra;
     }
 }
