@@ -1,5 +1,3 @@
-// ====== FILE: src\Server\controller\ServerController.java ======
-
 package Server.controller;
 
 import Server.ChatServer;
