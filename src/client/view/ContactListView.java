@@ -226,7 +226,7 @@ public class ContactListView extends JFrame implements ModelObserver {
             chatView.requestFocus();
         } else {
             // 创建新的聊天窗口
-            // 注意：我们复用 ChatView，并将小组聊天视为一种特殊的“群聊” (isGroupChat = true)
+            // 注意：我们复用 ChatView，并将小组聊天视为一种特殊的"群聊" (isGroupChat = true)
             ChatView chatView = new ChatView(controller, model, true, String.valueOf(teamId), team.getName(),true);
             chatView.addWindowListener(new WindowAdapter() {
                 @Override
@@ -337,34 +337,6 @@ public class ContactListView extends JFrame implements ModelObserver {
             }
         });
         
-        // 添加右键菜单
-        groupList.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                if (e.isPopupTrigger()) {
-                    showGroupContextMenu(e);
-                }
-            }
-            
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                if (e.isPopupTrigger()) {
-                    showGroupContextMenu(e);
-                }
-            }
-            
-            private void showGroupContextMenu(MouseEvent e) {
-                int index = groupList.locationToIndex(e.getPoint());
-                if (index >= 0) {
-                    groupList.setSelectedIndex(index);
-                    GroupItem selectedGroup = groupList.getSelectedValue();
-                    if (selectedGroup != null) {
-                        ContactListView.this.showGroupContextMenu(selectedGroup, e.getX(), e.getY());
-                    }
-                }
-            }
-        });
-        
         JScrollPane scrollPane = new JScrollPane(groupList);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         
@@ -420,43 +392,86 @@ public class ContactListView extends JFrame implements ModelObserver {
         JTextField groupNameField = new JTextField(15);
         panel.add(groupNameField, gbc);
         
-        // 群组成员
+        // 群组成员标签
         gbc.gridx = 0;
         gbc.gridy = 1;
-        panel.add(new JLabel("成员(用逗号分隔):"), gbc);
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("选择群组成员:"), gbc);
         
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        JTextField membersField = new JTextField(15);
-        panel.add(membersField, gbc);
+        // 创建成员选择列表
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 2;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
         
-        int result = JOptionPane.showConfirmDialog(
-                this, panel, "创建群组", 
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        // 获取所有用户列表（排除当前用户）
+        ArrayList<String> allUsers = model.getAllUsers();
+        DefaultListModel<String> membersListModel = new DefaultListModel<>();
         
-        if (result == JOptionPane.OK_OPTION) {
+        for (String user : allUsers) {
+            if (!user.equals(currentUsername)) { // 排除当前用户
+                membersListModel.addElement(user);
+            }
+        }
+        
+        JList<String> membersList = new JList<>(membersListModel);
+        membersList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION); // 允许多选
+        membersList.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value,
+                    int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                
+                String username = (String) value;
+                boolean isOnline = model.getOnlineUsers().contains(username);
+                
+                // 使用不同颜色标识在线和离线用户
+                if (isOnline) {
+                    setForeground(new Color(0, 128, 0)); // 在线用户显示为绿色
+                    setText(username + " (在线)");
+                } else {
+                    setForeground(Color.GRAY); // 离线用户显示为灰色
+                    setText(username + " (离线)");
+                }
+                
+                return this;
+            }
+        });
+        
+        JScrollPane scrollPane = new JScrollPane(membersList);
+        scrollPane.setPreferredSize(new Dimension(250, 200));
+        panel.add(scrollPane, gbc);
+        
+        // 创建对话框
+        JDialog dialog = new JDialog(this, "创建群组", true);
+        dialog.setLayout(new BorderLayout());
+        dialog.add(panel, BorderLayout.CENTER);
+        
+        // 添加按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton cancelButton = new JButton("取消");
+        JButton createButton = new JButton("创建");
+        
+        cancelButton.addActionListener(e -> dialog.dispose());
+        
+        createButton.addActionListener(e -> {
             String groupName = groupNameField.getText().trim();
-            String membersText = membersField.getText().trim();
+            List<String> selectedMembers = membersList.getSelectedValuesList();
             
             if (groupName.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "群组名称不能为空", "错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, "群组名称不能为空", "错误", JOptionPane.ERROR_MESSAGE);
                 return;
             }
             
-            if (membersText.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "群组成员不能为空", "错误", JOptionPane.ERROR_MESSAGE);
+            if (selectedMembers.isEmpty()) {
+                JOptionPane.showMessageDialog(dialog, "请至少选择一名群组成员", "错误", JOptionPane.ERROR_MESSAGE);
                 return;
             }
             
-            // 解析成员列表
-            String[] memberArray = membersText.split(",");
-            ArrayList<String> members = new ArrayList<>();
-            for (String member : memberArray) {
-                String trimmed = member.trim();
-                if (!trimmed.isEmpty()) {
-                    members.add(trimmed);
-                }
-            }
+            // 创建一个新的列表，以便添加当前用户
+            ArrayList<String> members = new ArrayList<>(selectedMembers);
             
             // 确保当前用户在群组中
             if (!members.contains(currentUsername)) {
@@ -465,79 +480,18 @@ public class ContactListView extends JFrame implements ModelObserver {
             
             // 调用控制器创建群组
             controller.createGroup(groupName, members);
-        }
-    }
-
-    /**
-     * 显示群组上下文菜单
-     */
-    private void showGroupContextMenu(GroupItem group, int x, int y) {
-        JPopupMenu menu = new JPopupMenu();
+            dialog.dispose();
+        });
         
-        JMenuItem openItem = new JMenuItem("打开聊天");
-        openItem.addActionListener(e -> openGroupChat(group));
+        buttonPanel.add(cancelButton);
+        buttonPanel.add(createButton);
+        dialog.add(buttonPanel, BorderLayout.SOUTH);
         
-        JMenuItem addMemberItem = new JMenuItem("添加成员");
-        addMemberItem.addActionListener(e -> showAddMemberDialog(group));
-        
-        JMenuItem removeMemberItem = new JMenuItem("移除成员");
-        removeMemberItem.addActionListener(e -> showRemoveMemberDialog(group));
-        
-        JMenuItem leaveItem = new JMenuItem("退出群组");
-        leaveItem.addActionListener(e -> confirmLeaveGroup(group));
-        
-        menu.add(openItem);
-        menu.add(addMemberItem);
-        menu.add(removeMemberItem);
-        menu.addSeparator();
-        menu.add(leaveItem);
-        
-        menu.show(groupList, x, y);
-    }
-
-    /**
-     * 显示添加成员对话框
-     */
-    private void showAddMemberDialog(GroupItem group) {
-        String input = JOptionPane.showInputDialog(
-                this, "请输入要添加的用户名:", "添加群组成员", JOptionPane.PLAIN_MESSAGE);
-        
-        if (input != null && !input.trim().isEmpty()) {
-            controller.addUserToGroup(group.getId(), input.trim());
-        }
-    }
-
-    /**
-     * 显示移除成员对话框
-     */
-    private void showRemoveMemberDialog(GroupItem group) {
-        ArrayList<String> members = group.getGroupInfo().getMembers();
-        if (members == null || members.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "群组没有成员", "错误", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
-        String[] memberArray = members.toArray(new String[0]);
-        String selected = (String) JOptionPane.showInputDialog(
-                this, "选择要移除的成员:", "移除群组成员",
-                JOptionPane.PLAIN_MESSAGE, null, memberArray, memberArray[0]);
-        
-        if (selected != null) {
-            controller.removeUserFromGroup(group.getId(), selected);
-        }
-    }
-
-    /**
-     * 确认退出群组
-     */
-    private void confirmLeaveGroup(GroupItem group) {
-        int result = JOptionPane.showConfirmDialog(
-                this, "确定要退出群组 \"" + group.getName() + "\" 吗?",
-                "退出群组", JOptionPane.YES_NO_OPTION);
-        
-        if (result == JOptionPane.YES_OPTION) {
-            controller.leaveGroup(group.getId());
-        }
+        // 设置对话框属性
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setVisible(true);
     }
 
     /**

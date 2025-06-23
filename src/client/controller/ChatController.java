@@ -212,96 +212,6 @@ public class ChatController {
     }
     
     /*
-        退出群组
-    */
-    public void leaveGroup(int groupId) {
-        // 使用MessageSender发送退出群组请求
-        boolean success = messageSender.sendLeaveGroupRequest(groupId);
-        
-        if (!success) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("退出群组失败");
-            }
-        }
-    }
-    
-    /*
-        添加用户到群组
-    */
-    public void addUserToGroup(int groupId, String username) {
-        // 获取当前群组信息
-        Group_info currentGroup = model.getGroups().get(groupId);
-        if (currentGroup == null) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("群组不存在");
-            }
-            return;
-        }
-        
-        // 创建新的成员列表
-        ArrayList<String> newMembers = new ArrayList<>(currentGroup.getMembers());
-        
-        // 检查用户是否已在群组中
-        if (newMembers.contains(username)) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("用户已在群组中");
-            }
-            return;
-        }
-        
-        // 添加新成员
-        newMembers.add(username);
-        
-        // 使用MessageSender发送更新群组请求
-        boolean success = messageSender.sendUpdateGroupRequest(
-            groupId, currentGroup.get_Group_name(), newMembers);
-        
-        if (!success) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("添加用户到群组失败");
-            }
-        }
-    }
-    
-    /*
-        从群组移除用户
-    */
-    public void removeUserFromGroup(int groupId, String username) {
-        // 获取当前群组信息
-        Group_info currentGroup = model.getGroups().get(groupId);
-        if (currentGroup == null) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("群组不存在");
-            }
-            return;
-        }
-        
-        // 创建新的成员列表
-        ArrayList<String> newMembers = new ArrayList<>(currentGroup.getMembers());
-        
-        // 检查用户是否在群组中
-        if (!newMembers.contains(username)) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("用户不在群组中");
-            }
-            return;
-        }
-        
-        // 移除成员
-        newMembers.remove(username);
-        
-        // 使用MessageSender发送更新群组请求
-        boolean success = messageSender.sendUpdateGroupRequest(
-            groupId, currentGroup.get_Group_name(), newMembers);
-        
-        if (!success) {
-            for (ChatView chatView : chatViews.values()) {
-                chatView.showError("从群组移除用户失败");
-            }
-        }
-    }
-    
-    /*
         处理新接收到的消息
     */
     public void onNewMessage(Chat_info chatInfo) {
@@ -375,16 +285,6 @@ public class ChatController {
         for (ChatView chatView : chatViews.values()) {
             chatView.updateGroupList();
             chatView.showMessage("群组 \"" + groupInfo.get_Group_name() + "\" 已更新");
-        }
-    }
-    
-    /*
-        处理被移出群组事件
-    */
-    public void onRemovedFromGroup(Group_info groupInfo) {
-        for (ChatView chatView : chatViews.values()) {
-            chatView.updateGroupList();
-            chatView.showMessage("您已被移出群组 \"" + groupInfo.get_Group_name() + "\"");
         }
     }
     

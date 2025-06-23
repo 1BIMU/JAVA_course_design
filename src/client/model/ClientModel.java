@@ -137,7 +137,7 @@ public class ClientModel {
     }
     
     /*
-        TODO: 更新群组信息（待实现）
+        更新群组信息
     */
     public void updateGroup(Group_info groupInfo) {
         groups.put(groupInfo.get_Group_id(), groupInfo);
@@ -145,15 +145,7 @@ public class ClientModel {
     }
     
     /*
-        TODO: 移除群组（待实现）
-    */
-    public void removeGroup(int groupId) {
-        groups.remove(groupId);
-        notifyObservers(UpdateType.GROUPS);
-    }
-    
-    /*
-        TODO: 获取所有群组信息（待实现）
+        获取所有群组信息
     */
     public Map<Integer, Group_info> getGroups() {
         return new HashMap<>(groups);

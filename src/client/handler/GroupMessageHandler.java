@@ -31,11 +31,8 @@ public class GroupMessageHandler implements ClientMessageHandler {
             // 新建群组
             model.updateGroup(groupInfo);
             chatController.onGroupCreated(groupInfo);
-        } else if (!groupInfo.isExist()) {
-            // 被移出群组
-            model.removeGroup(groupInfo.get_Group_id());
-            chatController.onRemovedFromGroup(groupInfo);
-        } else {
+        } 
+        else {
             // 群组更新
             model.updateGroup(groupInfo);
             chatController.onGroupUpdated(groupInfo);
