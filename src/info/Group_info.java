@@ -77,4 +77,10 @@ public class Group_info implements Serializable {//该info用于封装群聊类�
     public void setExist(boolean exist){
         this.exist = exist;
     }
+
+    @Override
+    public String toString() {
+        // 这将使得 Group_info 对象在 JComboBox 中默认显示为它的名称
+        return this.name;
+    }
 }

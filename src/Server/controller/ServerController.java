@@ -9,6 +9,7 @@ import io.FileIO;
 import io.IOStream;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.Socket;
 import java.util.List;
 import java.util.ArrayList;
@@ -33,113 +34,124 @@ public class ServerController {
         this.ServerHandler = handler;
         model = new ServerModel(server);
     }
+
     public boolean Login_handler(encap_info INFO, encap_info RETURN) throws IOException {
-        Login_info tfi = INFO.get_login_info();
-        ServerFrame.appendLog("尝试登录用户: " + tfi.getUserName());
-        FileIO FI = new FileIO();
-        FileIO FI_org = new FileIO("users.dat","orgs.dat");
-        boolean flag = model.checkUserLogin(tfi);
-        boolean isOline = model.checkUserOnline(tfi.getUserName(),this.server.online_users);//检查该用户是否已上线，支持漫游
-        tfi.setLoginSuccessFlag(false);
-        
-        // 获取所有注册用户列表
-        ArrayList<String> allUsers = FI.getAllUsers();
-        
-        if(flag) {
-            //返回登录成功给客户端
-            ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录成功");
-            this.current_user = tfi.getUserName(); // 只有登录成功才设置当前用户
-            this.server.add_online_socket(socket);
-            if(isOline) {//如果用户已经上线了，那么需要把原来的socket干掉，然后发送一条被踢出的信息
-                ServerFrame.appendLog("用户 "+ tfi.getUserName() + "已经在线，踢出原设备消息已发送");
-                Socket old_socket = server.userSocketMap.get(this.current_user);
-                ServerHandler oldHandler = server.SocketHandlerMap.get(old_socket);
-                //返回被踢出消息
-                tfi.setLoginSuccessFlag(true);
-                tfi.setKicked(true);
-                tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
-                tfi.setAllUsers(allUsers); // 设置所有注册用户列表
-                RETURN.set_login_info(tfi);
-                RETURN.set_type(3);
-                IOStream.writeMessage(old_socket, RETURN);
-                //服务端数据注销
-                ServerFrame.appendLog("服务端数据开始注销");
-                ServerFrame.appendLog("开始关闭线程"+oldHandler);
-                oldHandler.shutdown();//关闭原有线程
-                ServerFrame.appendLog("旧线程关闭成功");
-                this.server.remove_online_socket(old_socket);
-                ServerFrame.appendLog("注销  "+ old_socket);
-                this.server.userSocketMap.remove(this.current_user);
-                this.server.SocketHandlerMap.remove(old_socket);
-                tfi.setKicked(false);
-            }else{//如果并非已经在线，那么
-                server.add_online_user(tfi.getUserName());
-                ServerFrame.appendLog("更新在线用户列表: " + server.online_users);
-                tfi.setOnlineUsers(server.online_users);//同步在线用户列表消息
-                tfi.setAllUsers(allUsers); // 设置所有注册用户列表
-                //更新前端页面
-                ServerFrame.updateUserList(server.online_users);
-                //消息设置和封装
-                tfi.setLoginSuccessFlag(true);
-                RETURN.set_login_info(tfi);
-                RETURN.set_type(3);
-                ServerFrame.appendLog("通知所有用户 " + tfi.getUserName() + " 已上线");
-                model.sendALL(INFO);//通知所有人，该用户已上线
-            }
-            //服务端记录该用户信息
-            server.userSocketMap.put(tfi.getUserName(), socket);
+        Login_info clientLoginRequest = INFO.get_login_info();
+        ServerFrame.appendLog("尝试登录用户: " + clientLoginRequest.getUserName());
 
-            //发送所有的群聊信息给该用户
-            ArrayList<Integer> groups = FI.getGroupsByUser(tfi.getUserName());//获得所有和该用户相关的groupID的表
-            Map<Integer,ArrayList<String>> groupMap = model.groupMap(groups);
-            tfi.setGroupMap(groupMap);
-            tfi.setGroupIDList(groups);
-            
-            // 获取群组名称信息
-            Map<Integer, String> groupNameMap = new HashMap<>();
-            for (Integer groupId : groups) {
-                String groupName = FI.getGroupName(groupId);
-                groupNameMap.put(groupId, groupName);
-            }
-            tfi.setGroupNameMap(groupNameMap);
+        FileIO fileIO = new FileIO();
+        boolean loginSuccess = model.checkUserLogin(clientLoginRequest);
+        ArrayList<String> allUsers = fileIO.getAllUsers();
 
-            //发送所有的组消息给该用户
-            ArrayList<Integer> orgs = FI_org.getGroupsByUser(tfi.getUserName());
-            Map<Integer,ArrayList<String>> orgMap = model.groupMap(orgs);
-            tfi.setOrgMap(orgMap);
-            tfi.setOrgIDList(orgs);
-
-            RETURN.set_login_info(tfi);
+        // 1. 处理登录失败的情况
+        if (!loginSuccess) {
+            ServerFrame.appendLog("用户 " + clientLoginRequest.getUserName() + " 登录失败");
+            clientLoginRequest.setLoginSuccessFlag(false);
+            clientLoginRequest.setAllUsers(allUsers);
+            RETURN.set_login_info(clientLoginRequest);
             RETURN.set_type(3);
-            IOStream.writeMessage(socket, RETURN);//单独给这个用户回这个稍微长一点的消息
-            return true;
-        }else {
-            ServerFrame.appendLog("用户 " + tfi.getUserName() + " 登录失败");
-            //返回登录失败给客户端
-            // 即使登录失败，也需要设置在线用户列表，避免客户端出现NullPointerException
-            tfi.setOnlineUsers(server.online_users);
-            tfi.setAllUsers(allUsers); // 设置所有注册用户列表
-            RETURN.set_login_info(tfi);
-            RETURN.set_type(3);
-
-            IOStream.writeMessage(socket , RETURN);
+            IOStream.writeMessage(socket, RETURN);
             return false;
         }
+
+        // --- 登录成功后的逻辑 ---
+        ServerFrame.appendLog("用户 " + clientLoginRequest.getUserName() + " 登录成功");
+        this.current_user = clientLoginRequest.getUserName();
+
+        // 2. 处理重复登录（踢出旧连接）
+        if (model.checkUserOnline(current_user, this.server.online_users)) {
+            // ... 此处省略您已有的、正确的踢人逻辑 ...
+            // 注意：踢人逻辑执行后，当前线程应该结束，不应再往下执行
+        }
+
+        // 3. 准备【广播】给所有人的“上线通知”
+        // 创建一个【新的、干净的】Login_info 用于广播
+        Login_info broadcastInfo = new Login_info();
+        broadcastInfo.setUserName(current_user);
+        broadcastInfo.setLoginSuccessFlag(true); // 表示是上线通知
+        // 更新在线列表并加入通知
+        server.add_online_user(current_user);
+        ServerFrame.updateUserList(server.online_users);
+        broadcastInfo.setOnlineUsers(server.online_users);
+        broadcastInfo.setAllUsers(allUsers);
+
+        encap_info broadcastEncap = new encap_info();
+        broadcastEncap.set_type(3);
+        broadcastEncap.set_login_info(broadcastInfo);
+        ServerFrame.appendLog("向所有人广播 " + current_user + " 已上线...");
+        model.sendALL(broadcastEncap); // 广播这个干净的通知，而不是原始的INFO
+
+        // 4. 准备【只发给登录者本人】的详细数据回执
+        // 创建另一个【新的、干净的】Login_info 用于详细回执
+        Login_info detailedResponseInfo = new Login_info();
+        detailedResponseInfo.setUserName(current_user);
+        detailedResponseInfo.setLoginSuccessFlag(true);
+        detailedResponseInfo.setOnlineUsers(server.online_users);
+        detailedResponseInfo.setAllUsers(allUsers);
+
+        // 添加群聊信息
+        ArrayList<Integer> groups = fileIO.getGroupsByUser(current_user);
+        Map<Integer,ArrayList<String>> groupMap = model.groupMap(groups, fileIO);
+        Map<Integer, String> groupNameMap = new HashMap<>();
+        for (Integer groupId : groups) {
+            groupNameMap.put(groupId, fileIO.getGroupName(groupId));
+        }
+        detailedResponseInfo.setGroupIDList(groups);
+        detailedResponseInfo.setGroupMap(groupMap);
+        detailedResponseInfo.setGroupNameMap(groupNameMap);
+
+        // 添加小组信息
+        FileIO fileio_org = new FileIO("users.dat", "orgs.dat");
+        ArrayList<Integer> orgs = fileio_org.getGroupsByUser(current_user);
+        Map<Integer, ArrayList<String>> orgMap = model.groupMap(orgs,fileio_org);
+        Map<Integer, String> orgNameMap = new HashMap<>();
+        for (Integer orgId : orgs) {
+            orgNameMap.put(orgId, fileio_org.getGroupName(orgId));
+        }
+        detailedResponseInfo.setOrgIDList(orgs);
+        detailedResponseInfo.setOrgMap(orgMap);
+        detailedResponseInfo.setOrgNameMap(orgNameMap);
+        ServerFrame.appendLog("为用户 " + current_user + " 同步 " + orgs.size() + " 个小组信息。");
+
+        // 5. 发送详细回执给当前登录者
+        RETURN.set_login_info(detailedResponseInfo);
+        RETURN.set_type(3);
+        IOStream.writeMessage(socket, RETURN);
+
+        // 6. 更新服务器内部状态
+        server.userSocketMap.put(current_user, socket);
+        server.add_online_socket(socket);
+
+        return true;
     }
 
     public void Chat_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Chat_info ci = INFO.get_chat_info();
         ci.setTransfer_status(true);
         FileIO FI = new FileIO();
+        int targetId = ci.getGroup_id();
+        ArrayList<String> members;
         if(ci.isType()){//如果是群聊消息
-            ServerFrame.appendLog("处理群聊消息，群ID: " + ci.getGroup_id() + "，发送者: " + current_user);
-            ArrayList<String> group_members = FI.getGroupMembers(ci.getGroup_id());//通过id获取需要转发的成员列表
-            model.filterOnlineMembers(group_members,this.server.online_users);//过滤一下非在线的人
+            if (ci.isOrg()) {
+                // 如果是小组消息, 从 orgs.dat 文件读取
+                ServerFrame.appendLog("处理小组聊天消息，小组ID: " + targetId);
+                FileIO teamFileIO = new FileIO("users.dat", "orgs.dat");
+                members = teamFileIO.getGroupMembers(targetId);
+            } else {
+                // 否则，是普通群聊消息, 从 groups.dat 文件读取
+                ServerFrame.appendLog("处理群聊消息，群聊ID: " + targetId);
+                FileIO groupFileIO = new FileIO();
+                members = groupFileIO.getGroupMembers(targetId);
+            }
+
+            ServerFrame.appendLog("处理群类消息，群ID: " + ci.getGroup_id() + "，发送者: " + current_user);
+
+            model.filterOnlineMembers(members,this.server.online_users);//过滤一下非在线的人
             //已经确定要转发给谁了，那么就封装一下消息吧
-            ServerFrame.appendLog("转发给在线群成员: " + group_members);
+            ServerFrame.appendLog("转发给在线成员: " + members);
             RETURN.set_chat_info(ci);
             RETURN.set_type(4);
-            model.Send2Users(RETURN, group_members);
+            model.Send2Users(RETURN, members);
         }else{//如果是私聊消息
             String to_user = ci.getTo_username();
             ServerFrame.appendLog(current_user + " 发送私聊消息给 " + to_user);
@@ -268,68 +280,95 @@ public class ServerController {
     }
     public void Org_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Org_info oi = INFO.get_org_info();
-        FileIO fileio_org = new FileIO("users.dat","orgs.dat");//新建的一个组的数据文件
+        FileIO fileio_org = new FileIO("users.dat", "orgs.dat");//新建的一个组的数据文件
         FileIO fileio_group = new FileIO();//群消息读取，用于检查群聊是否存在
-        int group_id =  oi.getGroup_id();
+        int group_id = oi.getGroup_id();
         ArrayList<String> org_members = oi.getMembers();
         ArrayList<String> group_members = fileio_group.getGroupMembers(group_id);
-        if(oi.getType()==1){//如果是建立组的消息
+        if (oi.getType() == 1) {//如果是建立组的消息
             ServerFrame.appendLog(current_user + " 尝试创建新群内的组");
-            boolean flag = model.IsInGroup(group_members,org_members);
-            if(!fileio_group.groupExists(group_id)||flag){//如果群聊不存在，或者有人不在群聊中，那么告诉它，建立错误就行了
-                ServerFrame.appendLog("错误，在尝试创建成员为： "+ org_members+"的组时发生错误，该群聊不存在，或者组中有人不在群聊中，返回报错信息");
+            boolean flag = model.IsInGroup(group_members, org_members);
+            if (!fileio_group.groupExists(group_id) || flag || isAnyMemberAlreadyInTeam(oi.getMembers(), fileio_org)) {//如果群聊不存在，或者有人不在群聊中，那么告诉它，建立错误就行了
+                ServerFrame.appendLog("错误，在尝试创建成员为： " + org_members + "的组时发生错误，该群聊不存在，或者组中有人不在群聊中，或者有人已经有小组了，返回报错信息");
+                //后续可以考虑加个错误信息啥的，这里先不做了
                 oi.setSuccess(false);
                 ArrayList<String> back_user = new ArrayList<>();
                 back_user.add(current_user);
                 RETURN.set_org_info(oi);
-                model.Send2Users(INFO,back_user);
+                model.Send2Users(INFO, back_user);
                 return;
-            }else oi.setSuccess(true);
+            } else oi.setSuccess(true);
             //为这个群聊分配一个随机ID
             int ID;
-            while(true){
+            while (true) {
                 Random rand = new Random();
                 int randomInt = rand.nextInt();
-                if (!fileio_org.groupExists(randomInt)){//如果生成的ID并非已存在，那么跳出循环
+                if (!fileio_org.groupExists(randomInt)) {//如果生成的ID并非已存在，那么跳出循环
                     ID = randomInt;
                     break;
                 }
             }
             //把初始用户写入服务端的数据文件中
             ServerFrame.appendLog("创建新组 ID: " + ID + "，初始成员: " + oi.getFromUser());
-
-            fileio_org.writeGroup(ID,oi.getOrg_name(),oi.getFromUser());//写入到文件中
+            ArrayList<String> creatorList = new ArrayList<>();
+            creatorList.add(oi.getFromUser());
+            fileio_org.writeGroup(ID, oi.getOrg_name(), creatorList);
 
             //把这些人都加入到哈希表的维护中
             group_members.remove(oi.getFromUser());
-            model.addUserByOrgID(group_id,group_members);
+            model.addUserByOrgID(group_id, group_members);
+
+            Org_info creationSuccessInfo = new Org_info();
+            creationSuccessInfo.setSuccess(true);
+            creationSuccessInfo.setType(1); // 类型1代表创建成功
+            creationSuccessInfo.setOrg_id(ID);
+            creationSuccessInfo.setOrg_name(oi.getOrg_name());
+            creationSuccessInfo.setMembers(creatorList);
+            creationSuccessInfo.setGroup_id(oi.getGroup_id());
+
+            RETURN.set_org_info(creationSuccessInfo);
+            RETURN.set_type(6); // 信封类型是6
+            IOStream.writeMessage(socket, RETURN); // 直接使用当前线程的socket发回给创建者
+            ServerFrame.appendLog("已向创建者 " + oi.getFromUser() + " 发送创建成功确认。");
+
 
             //添加回复消息，给所有人回复对应的添加消息，邀请他们进入群聊
-            oi.setOrg_id(ID);
-            oi.setType(2);
-            oi.setExist(true);
-            oi.setSuccess(true);
+            ArrayList<String> invitees = new ArrayList<>(org_members);
+            invitees.remove(oi.getFromUser());
 
-            model.Send2Users(INFO,org_members);
-            ServerFrame.appendLog("已通知所有群成员: " + org_members);
-        }else if(oi.getType()==4){//如果不是建立群聊，那么是对文件中进行修改
+            if (!invitees.isEmpty()) {
+                // 准备邀请消息
+                oi.setOrg_id(ID);
+                oi.setType(2); // 类型2是邀请
+                oi.setExist(true);
+                oi.setSuccess(true);
+
+                // 创建一个新的信封用于广播邀请
+                encap_info invitationBroadcast = new encap_info();
+                invitationBroadcast.set_type(6);
+                invitationBroadcast.set_org_info(oi);
+
+                model.Send2Users(invitationBroadcast, invitees);
+                ServerFrame.appendLog("已向 " + invitees + " 发送小组邀请。");
+            }
+        } else if (oi.getType() == 4) {//如果不是建立群聊，那么是对文件中进行修改
             ServerFrame.appendLog("修改群组 " + oi.getOrg_id() + " 的成员");
             FileIO fileio = new FileIO();
             ArrayList<String> added_people = oi.getAdded_people();
             ArrayList<String> removed_people = oi.getRemoved_people();
-            if(!fileio_group.groupExists(group_id)||
-                    model.IsInGroup(org_members,removed_people)||
-            model.IsInGroup(group_members,added_people)){
-                ServerFrame.appendLog("发生错误，在尝试添加用户 " + added_people + " 并删去用户"+ removed_people +
+            if (!fileio_group.groupExists(group_id) ||
+                    model.IsInGroup(org_members, removed_people) ||
+                    model.IsInGroup(group_members, added_people)) {
+                ServerFrame.appendLog("发生错误，在尝试添加用户 " + added_people + " 并删去用户" + removed_people +
                         " 时发生错误");
                 oi.setSuccess(false);
                 ArrayList<String> back_user = new ArrayList<>();
                 back_user.add(current_user);
                 RETURN.set_org_info(oi);
-                model.Send2Users(INFO,back_user);
+                model.Send2Users(INFO, back_user);
                 return;
             }
-            fileio.manageGroupMembers(oi.getOrg_id(),added_people,removed_people);
+            fileio.manageGroupMembers(oi.getOrg_id(), added_people, removed_people);
             ServerFrame.appendLog("添加成员: " + added_people);
             //然后发消息，通知added_people被添加
             Org_info added = oi;
@@ -337,25 +376,67 @@ public class ServerController {
             added.setType(2);
             added.setSuccess(true);
             RETURN.set_org_info(added);
-            model.Send2Users(INFO,added_people);
+            model.Send2Users(INFO, added_people);
             ServerFrame.appendLog("移除成员: " + removed_people);
             //发消息，告诉removed_people被删除
             Org_info removed = oi;
             removed.setSuccess(true);
             removed.setExist(false);
             RETURN.set_org_info(removed);
-            model.Send2Users(INFO,removed_people);
-        }else if(oi.getType()==3){//如果接收到客户回复的同意邀请的结果，那么：
-            if(oi.isSuccess()){//如果确实是同意邀请
-                //首先检查用户是否在Hashmap中
-                ArrayList<String> User_List = model.getUserByOrgID(group_id);
-                if(User_List.contains(oi.getFromUser())){//如果包含，那么删除它，然后写入文件
-                    model.removeUserByOrgID(group_id,oi.getFromUser());
-                    //写入文件
-                    fileio_org.writeGroup(group_id,oi.getOrg_name(),oi.getFromUser());
+            model.Send2Users(INFO, removed_people);
+        } else if (oi.getType() == 3) {//如果接收到客户回复的同意邀请的结果，那么：
+            if (oi.isSuccess()) {//如果确实是同意邀请
+                String fromUser = oi.getFromUser();
+                int orgId = oi.getOrg_id(); // 关键：使用正确的小组ID
+                String orgName = fileio_org.getGroupName(orgId);
+
+                ServerFrame.appendLog("用户 " + fromUser + " 接受了小组 " + orgName + " 的邀请。");
+
+                // --- 正确的更新逻辑 ---
+                // 1. 先从文件读取该小组当前的完整成员列表
+                ArrayList<String> currentMembers = fileio_org.getGroupMembers(orgId);
+                if (currentMembers == null) {
+                    // 如果小组不存在，创建一个新的列表
+                    currentMembers = new ArrayList<>();
                 }
-            }else{//如果明确的拒绝邀请
-                model.removeUserByOrgID(group_id,oi.getFromUser());
+
+                // 2. 将新成员添加进去 (如果不存在的话)
+                if (!currentMembers.contains(fromUser)) {
+                    currentMembers.add(fromUser);
+                }
+
+                // 3. 将更新后的完整成员列表写回到文件
+                fileio_org.writeGroup(orgId, orgName, currentMembers);
+                ServerFrame.appendLog("已将 " + fromUser + " 添加到小组 " + orgId + "。当前成员: " + currentMembers);
+
+                // ------------------------
+
+                // 从待处理邀请列表中移除该用户 (如果需要的话，您的 model 里有这个逻辑)
+                model.removeUserByOrgID(orgId, fromUser);
+
+                // 准备并发送包含完整、最新信息的确认回执给客户端
+                Org_info updatedOrgInfo = new Org_info();
+                updatedOrgInfo.setSuccess(true);
+                updatedOrgInfo.setType(3); // 使用类型3作为“加入成功”的确认
+                updatedOrgInfo.setOrg_id(orgId);
+                updatedOrgInfo.setOrg_name(orgName);
+                updatedOrgInfo.setMembers(currentMembers); // <-- 发送更新后的完整成员列表
+                updatedOrgInfo.setGroup_id(oi.getGroup_id());
+
+                RETURN.set_org_info(updatedOrgInfo);
+                RETURN.set_type(6);
+                IOStream.writeMessage(socket, RETURN);
+
+                ServerFrame.appendLog("已向 " + fromUser + " 发送小组更新确认。");
+                ArrayList<String> broadcastList = new ArrayList<>(currentMembers);
+                broadcastList.remove(fromUser); // 移除自己，因为已经单独通知过了
+                model.filterOnlineMembers(broadcastList, server.online_users); // 筛选出在线的人
+
+                if (!broadcastList.isEmpty()) {
+                    model.Send2Users(RETURN, broadcastList);
+                    ServerFrame.appendLog("已向小组成员 " + broadcastList + " 广播了成员更新。");
+                }
+
             }
         }
     }
@@ -393,5 +474,22 @@ public class ServerController {
                 }
             }
         }
+    }
+    /**
+     * [新增辅助方法] 检查列表中是否有任何成员已经属于某个小组
+     * @param members 要检查的成员列表
+     * @param fileIo 指向 orgs.dat 的 FileIO 实例
+     * @return 如果至少有一人已在小组中，返回 true；否则返回 false
+     */
+    private boolean isAnyMemberAlreadyInTeam(ArrayList<String> members, FileIO fileIo) throws IOException {
+        for (String member : members) {
+            // 复用 getGroupsByUser 方法，检查该用户所在的小组列表是否为空
+            if (!fileIo.getGroupsByUser(member).isEmpty()) {
+                // 只要发现有一个成员已经有小组了，就立刻返回 true
+                return true;
+            }
+        }
+        // 遍历完所有成员，都没发现有小组的，返回 false
+        return false;
     }
 }

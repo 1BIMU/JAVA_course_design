@@ -37,6 +37,7 @@ public class ClientModel {
     private Map<Integer, Group_info> groups;
     // 小组信息映射表 <群组ID, 群组信息>
     private Map<Integer, Org_info> orgs;//TODO: 这里的具体逻辑待服务端实现
+    private List<Org_info> pendingTeamInvitations;//待处理邀请
     // 聊天消息历史记录
     private List<Chat_info> messageHistory;   //TODO:这里的具体逻辑待服务端实现
     // 最新的聊天消息
@@ -58,6 +59,8 @@ public class ClientModel {
         this.onlineUsers = new ArrayList<>();
         this.allUsers = new ArrayList<>();
         this.groups = new HashMap<>();
+        this.orgs = new HashMap<>(); // 确保小组 map 被初始化
+        this.pendingTeamInvitations = new ArrayList<>(); // 确保邀请 list 被初始化
         this.messageHistory = new ArrayList<>();
         this.unreadMessages = new HashMap<>();
         this.loggedIn = false;
@@ -282,7 +285,36 @@ public class ClientModel {
     public ArrayList<String> getAllUsers() {
         return new ArrayList<>(allUsers);
     }
-    
+    /**
+     * 获取待处理的小组邀请
+     */
+    public List<Org_info> getPendingTeamInvitations() {
+        return new ArrayList<>(pendingTeamInvitations);
+    }
+
+    /**
+     * 添加一个新的待处理小组邀请
+     * @param invitation 邀请信息
+     */
+    public void addPendingTeamInvitation(Org_info invitation) {
+        // 防止重复添加
+        for (Org_info existing : pendingTeamInvitations) {
+            if (existing.getOrg_id() == invitation.getOrg_id()) {
+                return;
+            }
+        }
+        this.pendingTeamInvitations.add(invitation);
+        notifyObservers(UpdateType.TEAM_INVITATIONS);
+    }
+
+    /**
+     * 根据小组ID移除一个待处理的邀请
+     * @param orgId 小组ID
+     */
+    public void removePendingTeamInvitation(int orgId) {
+        this.pendingTeamInvitations.removeIf(inv -> inv.getOrg_id() == orgId);
+        notifyObservers(UpdateType.TEAM_INVITATIONS);
+    }
     /*
         登出时，需要清除所有数据
     */
@@ -291,6 +323,9 @@ public class ClientModel {
         onlineUsers.clear();
         allUsers.clear();
         clearGroups();
+        clearOrgs();
+        orgs.clear();
+        pendingTeamInvitations.clear();
         messageHistory.clear();
         lastChatMessage = null;
         loggedIn = false;
@@ -305,7 +340,12 @@ public class ClientModel {
         groups.clear();
         notifyObservers(UpdateType.GROUPS);
     }
-    
+    public void clearOrgs() {
+        if (orgs != null) {
+            orgs.clear();
+        }
+        notifyObservers(UpdateType.ORGANIZATIONS);
+    }
     /*
         模型的所有更新类型
     */
@@ -315,6 +355,7 @@ public class ClientModel {
         ALL_USERS,     // 所有注册用户列表更新
         GROUPS,        // 群组信息更新
         ORGANIZATIONS, // 小组类型更新
+        TEAM_INVITATIONS, // 小组邀请更新
         CHAT,          // 聊天消息更新
         LOGIN_STATUS,  // 登录状态更新
         ALL           // 全部更新

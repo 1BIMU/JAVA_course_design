@@ -11,6 +11,9 @@ import java.io.File;
 import client.MessageSender;
 import client.model.ClientModel;
 import client.view.ChatView;
+import client.view.ContactListView;
+import client.view.CreateTeamDialog;
+import client.view.TeamInvitationsView;
 import info.Chat_info;
 import info.Group_info;
 import info.Org_info;
@@ -32,7 +35,7 @@ public class ChatController {
     private Map<String, ChatView> chatViews = new HashMap<>();
     private MessageSender messageSender; // 替代原来的Socket
     private VoiceCallController voiceCallController; // 语音通话控制器
-    
+    private ContactListView contactListView; // 新增一个对主窗口的引用
     /*
         构造函数
     */
@@ -40,7 +43,63 @@ public class ChatController {
         this.model = model;
         this.messageSender = messageSender;
     }
-    
+    //添加引用
+    public void setContactListView(ContactListView contactListView) {
+        this.contactListView = contactListView;
+    }
+
+    /**
+     * 显示创建小组对话框
+     */
+    public void showCreateTeamDialog() {
+        if (contactListView != null) {
+            CreateTeamDialog dialog = new CreateTeamDialog(contactListView, this, model);
+            dialog.setVisible(true);
+        }
+    }
+
+    /**
+     * 显示小组邀请视图
+     */
+    public void showTeamInvitationsView() {
+        if (contactListView != null) {
+            TeamInvitationsView view = new TeamInvitationsView(contactListView, this, model);
+            view.setVisible(true);
+        }
+    }
+
+    /**
+     * 创建小组的逻辑
+     * @param parentGroupId 父级群聊ID
+     * @param teamName 小组名称
+     * @param members 成员列表
+     */
+    public void createTeam(int parentGroupId, String teamName, List<String> members) {
+        // 调用你已有的 messageSender 方法
+        messageSender.sendEstablishOrgMessage(new ArrayList<>(members), model.getCurrentUser(), parentGroupId, teamName);
+    }
+
+    /**
+     * 响应小组邀请
+     * @param orgId 小组ID
+     * @param accepted 是否接受
+     */
+    public void respondToTeamInvitation(int orgId, boolean accepted) {
+        // 从待处理列表中找到邀请信息
+        Org_info invitation = model.getPendingTeamInvitations().stream()
+                .filter(inv -> inv.getOrg_id() == orgId)
+                .findFirst().orElse(null);
+
+        if (invitation == null) return;
+
+        // 从模型中移除该邀请，UI会自动更新
+        model.removePendingTeamInvitation(orgId);
+
+        if (accepted) {
+            // 调用你已有的 messageSender 方法
+            messageSender.sendOrgAckMessage(model.getCurrentUser(), invitation.getGroup_id(), orgId);
+        }
+    }
     /*
         设置聊天视图
     */
@@ -435,6 +494,24 @@ public class ChatController {
      */
     public void sendGroupMessage(String groupId, String message) {
          sendMessage(message, true, groupId);
+    }
+
+    /**
+     * 新增：发送小组聊天消息
+     * @param teamId 小组ID
+     * @param message 消息内容
+     */
+    public void sendTeamMessage(String teamId, String message) {
+        // 直接调用 MessageSender 的新方法
+        boolean success = messageSender.sendTeamChatMessage(model.getCurrentUser(), message, teamId);
+        if (success) {
+            // 清空输入框等后续处理
+            String key = "team:" + teamId; // 使用一个唯一的key
+            ChatView chatView = chatViews.get(key);
+            if (chatView != null) {
+                chatView.clearMessageInput();
+            }
+        }
     }
     
     /**

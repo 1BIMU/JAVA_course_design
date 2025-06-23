@@ -3,6 +3,7 @@ package client.view;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
@@ -13,6 +14,7 @@ import client.model.ClientModel.ModelObserver;
 import client.model.ClientModel.UpdateType;
 import info.Chat_info;
 import info.Group_info;
+import info.Org_info;
 
 /**
  * 联系人列表视图 - 类似QQ的主界面
@@ -37,10 +39,13 @@ public class ContactListView extends JFrame implements ModelObserver {
     // 打开的聊天窗口映射
     private Map<String, ChatView> privateChatWindows = new HashMap<>();
     private Map<Integer, ChatView> groupChatWindows = new HashMap<>();
-    
+    private Map<Integer, ChatView> teamChatWindows = new HashMap<>();
     // 当前用户名
     private String currentUsername;
 
+    private JList<TeamItem> teamList; // 新增：小组列表
+    private DefaultListModel<TeamItem> teamListModel; // 新增：小组列表模型
+    private JButton viewInvitationsButton; // 新增：查看邀请按钮
     /**
      * 构造函数
      */
@@ -100,8 +105,13 @@ public class ContactListView extends JFrame implements ModelObserver {
         JPanel groupPanel = createGroupListPanel();
         tabbedPane.addTab("群聊", new ImageIcon(), groupPanel);
 
+        // 新增：创建小组面板
+        JPanel teamPanel = createTeamListPanel();
+        tabbedPane.addTab("小组", null, teamPanel);
+
         // 创建底部工具栏
         JPanel bottomPanel = createBottomPanel();
+
 
         // 创建状态栏
         statusLabel = new JLabel("在线");
@@ -160,7 +170,103 @@ public class ContactListView extends JFrame implements ModelObserver {
         
         return panel;
     }
+    /**
+     * 创建小组列表面板 (新增方法)
+     */
+    private JPanel createTeamListPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
 
+        teamListModel = new DefaultListModel<>();
+        teamList = new JList<>(teamListModel);
+        teamList.setCellRenderer(new TeamListCellRenderer());
+        teamList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        // 这里可以为小组列表添加双击事件等
+        teamList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    TeamItem selectedTeam = teamList.getSelectedValue();
+                    if (selectedTeam != null) {
+                        openTeamChat(selectedTeam);
+                    }
+                }
+            }
+        });
+        JScrollPane scrollPane = new JScrollPane(teamList);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+
+        // 创建按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton createTeamButton = new JButton("创建小组");
+        createTeamButton.addActionListener(e -> controller.showCreateTeamDialog());
+
+        viewInvitationsButton = new JButton("查看邀请");
+        viewInvitationsButton.addActionListener(e -> controller.showTeamInvitationsView());
+
+        buttonPanel.add(createTeamButton);
+        buttonPanel.add(viewInvitationsButton);
+
+        panel.add(buttonPanel, BorderLayout.NORTH);
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    /**
+     * 打开小组聊天窗口 (新增方法)
+     * @param team 要打开聊天的目标小组
+     */
+    public void openTeamChat(TeamItem team) {
+        int teamId = team.getId();
+        if (teamChatWindows.containsKey(teamId)) {
+            // 如果窗口已存在，则激活它
+            ChatView chatView = teamChatWindows.get(teamId);
+            chatView.setVisible(true);
+            chatView.toFront();
+            chatView.requestFocus();
+        } else {
+            // 创建新的聊天窗口
+            // 注意：我们复用 ChatView，并将小组聊天视为一种特殊的“群聊” (isGroupChat = true)
+            ChatView chatView = new ChatView(controller, model, true, String.valueOf(teamId), team.getName(),true);
+            chatView.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    teamChatWindows.remove(teamId);
+                }
+            });
+            teamChatWindows.put(teamId, chatView);
+            chatView.setVisible(true);
+        }
+    }
+    /**
+     * 更新小组列表 (新增方法)
+     */
+    public void updateTeamList() {
+        SwingUtilities.invokeLater(() -> {
+            teamListModel.clear();
+            Map<Integer, Org_info> teams = model.getOrgs();
+            if (teams != null) {
+                for (Org_info team : teams.values()) {
+                    teamListModel.addElement(new TeamItem(team));
+                }
+            }
+        });
+    }
+    /**
+     * 更新邀请按钮的状态 (新增方法)
+     */
+    private void updateInvitationStatus() {
+        SwingUtilities.invokeLater(() -> {
+            List<Org_info> invitations = model.getPendingTeamInvitations();
+            if (invitations != null && !invitations.isEmpty()) {
+                viewInvitationsButton.setText("查看邀请 (" + invitations.size() + ")");
+                viewInvitationsButton.setForeground(Color.RED);
+            } else {
+                viewInvitationsButton.setText("查看邀请");
+                viewInvitationsButton.setForeground(null);
+            }
+        });
+    }
     /**
      * 创建用户列表面板
      */
@@ -449,7 +555,7 @@ public class ContactListView extends JFrame implements ModelObserver {
             model.markMessagesAsRead(false, username);
         } else {
             // 创建新的聊天窗口
-            ChatView chatView = new ChatView(controller, model, false, username, username);
+            ChatView chatView = new ChatView(controller, model, false, username, username,false);
             chatView.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
@@ -480,7 +586,7 @@ public class ContactListView extends JFrame implements ModelObserver {
             model.markMessagesAsRead(true, String.valueOf(groupId));
         } else {
             // 创建新的聊天窗口
-            ChatView chatView = new ChatView(controller, model, true, String.valueOf(groupId), group.getName());
+            ChatView chatView = new ChatView(controller, model, true, String.valueOf(groupId), group.getName(),false);
             chatView.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
@@ -508,6 +614,11 @@ public class ContactListView extends JFrame implements ModelObserver {
             chatView.dispose();
         }
         groupChatWindows.clear();
+
+        for (ChatView chatView : teamChatWindows.values()) {
+            chatView.dispose();
+        }
+        teamChatWindows.clear();
     }
 
     /**
@@ -582,6 +693,12 @@ public class ContactListView extends JFrame implements ModelObserver {
                 updateUserList();
                 // 同时更新群组列表，显示群聊未读消息
                 updateGroupList();
+                break;
+            case ORGANIZATIONS: // 小组列表更新
+                updateTeamList();
+                break;
+            case TEAM_INVITATIONS: // 小组邀请更新
+                updateInvitationStatus();
                 break;
         }
     }
@@ -808,11 +925,49 @@ public class ContactListView extends JFrame implements ModelObserver {
             return panel;
         }
     }
+    private class TeamListCellRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            JPanel panel = new JPanel(new BorderLayout(10, 0));
+            panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
+            if (isSelected) {
+                panel.setBackground(new Color(230, 240, 250));
+            } else {
+                panel.setBackground(list.getBackground());
+            }
+
+            TeamItem team = (TeamItem) value;
+
+            JLabel iconLabel = new JLabel("组", SwingConstants.CENTER);
+            iconLabel.setOpaque(true);
+            iconLabel.setBackground(new Color(255, 165, 0));
+            iconLabel.setForeground(Color.WHITE);
+            iconLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
+            iconLabel.setPreferredSize(new Dimension(40, 40));
+
+            JLabel nameLabel = new JLabel(team.getName());
+            nameLabel.setFont(new Font("宋体", Font.BOLD, 14));
+
+            JLabel memberCountLabel = new JLabel(team.getTeamInfo().getMembers().size() + "人");
+            memberCountLabel.setFont(new Font("宋体", Font.PLAIN, 12));
+            memberCountLabel.setForeground(Color.GRAY);
+
+            JPanel infoPanel = new JPanel(new BorderLayout());
+            infoPanel.setOpaque(false);
+            infoPanel.add(nameLabel, BorderLayout.CENTER);
+            infoPanel.add(memberCountLabel, BorderLayout.SOUTH);
+
+            panel.add(iconLabel, BorderLayout.WEST);
+            panel.add(infoPanel, BorderLayout.CENTER);
+
+            return panel;
+        }
+    }
     /**
      * 群组项包装类
      */
-    private class GroupItem {
+    public static class GroupItem {
         private Group_info groupInfo;
         
         public GroupItem(Group_info groupInfo) {
@@ -836,4 +991,15 @@ public class ContactListView extends JFrame implements ModelObserver {
             return getName();
         }
     }
+    public static class TeamItem {
+        private Org_info teamInfo;
+        public TeamItem(Org_info teamInfo) { this.teamInfo = teamInfo; }
+        public int getId() { return teamInfo.getOrg_id(); }
+        public String getName() { return teamInfo.getOrg_name(); }
+        public Org_info getTeamInfo() { return teamInfo; }
+        public int getGroupId() { return teamInfo.getGroup_id(); }
+        @Override
+        public String toString() { return getName(); }
+    }
+
 }

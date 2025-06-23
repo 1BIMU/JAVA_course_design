@@ -160,6 +160,29 @@ public class MessageSender {
         
         return IOStream.writeMessage(socket, info);
     }
+
+    /**
+     * 新增一个专门用于发送小组消息的方法，逻辑更清晰
+     * @param fromUser 发送者
+     * @param message 消息内容
+     * @param teamId 小组ID
+     * @return 是否成功
+     */
+    public boolean sendTeamChatMessage(String fromUser, String message, String teamId) {
+        System.out.println("发送小组消息");
+        Chat_info chatInfo = new Chat_info();
+        chatInfo.setType(true); // 小组消息表现为一种群聊消息
+        chatInfo.setIsOrg(true); // <-- 关键：设置小组标志位
+        chatInfo.setFrom_username(fromUser);
+        chatInfo.setText(message);
+        chatInfo.setGroup_id(Integer.parseInt(teamId)); // 使用 group_id 字段传递 teamId
+
+        encap_info info = new encap_info();
+        info.set_type(4); // 主类型仍然是聊天消息
+        info.set_chat_info(chatInfo);
+
+        return IOStream.writeMessage(socket, info);
+    }
     
     /*
         发送创建群组请求
@@ -696,7 +719,10 @@ public class MessageSender {
         orgInfo.setOrg_id(orgId);
         orgInfo.setSuccess(true);
         orgInfo.setFromUser(fromUser);
-        IOStream.writeMessage(socket, orgInfo);
+        encap_info info = new encap_info();
+        info.set_type(6);
+        info.set_org_info(orgInfo);
+        IOStream.writeMessage(socket, info);
     }
     public void sendOrgUserManageMessage(int orgID,int groupID, String fromUser,ArrayList<String> added,ArrayList<String> removed) {
         Org_info orgInfo = new Org_info();
@@ -706,14 +732,21 @@ public class MessageSender {
         orgInfo.setOrg_id(orgID);
         orgInfo.setAdded_people(added);
         orgInfo.setRemoved_people(removed);
-        IOStream.writeMessage(socket, orgInfo);
+        encap_info info = new encap_info();
+        info.set_type(6);
+        info.set_org_info(orgInfo);
+        IOStream.writeMessage(socket, info);
     }
-    public void sendEstablishOrgMessage(ArrayList<String> members, String fromUser,int groupID) {
+    public void sendEstablishOrgMessage(ArrayList<String> members, String fromUser, int groupID, String orgName) { // 添加一个 orgName 参数
         Org_info orgInfo = new Org_info();
         orgInfo.setType(1);
         orgInfo.setFromUser(fromUser);
         orgInfo.setGroup_id(groupID);
         orgInfo.setMembers(members);
-        IOStream.writeMessage(socket, orgInfo);
+        orgInfo.setOrg_name(orgName); // 设置小组名称
+        encap_info info = new encap_info();
+        info.set_type(6);
+        info.set_org_info(orgInfo);
+        IOStream.writeMessage(socket, info);
     }
 }

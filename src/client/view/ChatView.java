@@ -73,6 +73,7 @@ public class ChatView extends JFrame implements ModelObserver {
 
     // 聊天信息
     private boolean isGroupChat;
+    private boolean isTeamChat; // 是否为小组的字段
     private String targetId;  // 用户名或群组ID
     private String targetName; // 显示名称
 
@@ -92,14 +93,14 @@ public class ChatView extends JFrame implements ModelObserver {
      * @param targetId 目标ID（用户名或群组ID）
      * @param targetName 目标名称（用于显示）
      */
-    public ChatView(ChatController controller, ClientModel model, boolean isGroupChat, String targetId, String targetName) {
+    public ChatView(ChatController controller, ClientModel model, boolean isGroupChat, String targetId, String targetName,boolean isTeamChat) {
         this.controller = controller;
         this.model = model;
         this.isGroupChat = isGroupChat;
         this.targetId = targetId;
         this.targetName = targetName;
         this.voiceCallController = controller.getVoiceCallController(); // 获取语音通话控制器
-
+        this.isTeamChat = isTeamChat;
         // 设置窗口属性
         setTitle(isGroupChat ? "群聊: " + targetName : "与 " + targetName + " 聊天");
         setSize(600, 500);
@@ -302,9 +303,11 @@ public class ChatView extends JFrame implements ModelObserver {
         }
 
         // 发送消息到服务器，不在本地显示，等待服务器回传
-        if (isGroupChat) {
+        if (isGroupChat&&!isTeamChat) {
             controller.sendGroupMessage(targetId, message);
-        } else {
+        } else if(isTeamChat){
+            controller.sendTeamMessage(targetId, message);
+        }else{
             controller.sendPrivateMessage(targetId, message);
         }
         

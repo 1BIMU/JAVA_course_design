@@ -161,13 +161,15 @@ public class Client implements LoginCallback {
         
         // 创建联系人列表视图
         contactListView = new ContactListView(chatController, model, model.getCurrentUser());
-        
+        //引用面板
+        chatController.setContactListView(contactListView);
         // 注册模型观察者
         model.addObserver(contactListView);
         
         // 初始化视图数据
         contactListView.updateUserList();
         contactListView.updateGroupList();
+        contactListView.updateTeamList();
         
         // 显示联系人列表视图
         contactListView.setVisible(true);

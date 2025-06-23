@@ -4,6 +4,7 @@ import client.controller.LoginController;
 import client.model.ClientModel;
 import info.Group_info;
 import info.Login_info;
+import info.Org_info;
 import info.encap_info;
 
 import javax.swing.*;
@@ -69,7 +70,10 @@ public class LoginMessageHandler implements ClientMessageHandler {
                 
                 // 处理群组信息 - 处理服务器发送的群组列表
                 processGroupInfo(loginInfo);
-                
+
+                //处理小组信息
+                processOrgInfo(loginInfo);
+
                 // 通知登录控制器登录成功
                 loginController.onLoginSuccess();
             } else {
@@ -138,6 +142,36 @@ public class LoginMessageHandler implements ClientMessageHandler {
             }
         } else {
             System.out.println("没有收到群组信息或群组信息为空");
+        }
+    }
+    //处理小组信息的私有方法
+    private void processOrgInfo(Login_info loginInfo) {
+        System.out.println("初始化小组~");
+        ArrayList<Integer> orgIDList = loginInfo.getOrgIDList();
+        Map<Integer, ArrayList<String>> orgMap = loginInfo.getOrgMap();
+        Map<Integer, String> orgNameMap = loginInfo.getOrgNameMap();
+
+        if (orgIDList != null && orgMap != null && orgNameMap != null) {
+            System.out.println("收到小组信息：" + orgIDList.size() + " 个小组");
+
+            // 【修正点2】在填充新数据前，先清空旧数据
+            model.clearOrgs();
+
+            for (Integer orgId : orgIDList) {
+                ArrayList<String> members = orgMap.get(orgId);
+                String orgName = orgNameMap.get(orgId);
+
+                if (members != null && orgName != null) {
+                    System.out.println("正在处理小组信息: ID=" + orgId + ", 名称=" + orgName);
+                    Org_info orgInfo = new Org_info();
+                    orgInfo.setOrg_id(orgId);
+                    orgInfo.setOrg_name(orgName);
+                    orgInfo.setMembers(members);
+                    model.updateGOrg(orgInfo); // 更新到数据模型
+                }
+            }
+        } else {
+            System.out.println("没有收到小组信息或小组信息为空");
         }
     }
 } 

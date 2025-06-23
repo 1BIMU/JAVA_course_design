@@ -11,6 +11,10 @@ public class Chat_info implements Serializable {
 
     private int message_type = 0;//消息类型 0为字符串型消息，1为图片类型消息
     private boolean type;//标记是私聊消息还是群聊消息，如果为0，那么是私聊消息，如果为1，那么是群聊消息
+
+    //只好打补丁了，哎
+    private boolean isOrg;//标记是否为小组类型的消息，该项对服务端透明，用于方便在接受的时候，能够识别出ID
+
     private String from_username;//当前用户
     private String to_username;//给到那些用户，需要包含from_username
     private int group_id;//当前群聊的ID
@@ -18,7 +22,13 @@ public class Chat_info implements Serializable {
     
     public Chat_info() {
     }
-    
+    public boolean isOrg() {
+        return isOrg;
+    }
+    public void setIsOrg(boolean isOrg) {
+        this.isOrg = isOrg;
+    }
+
     public String getText() {
         return text;
     }
