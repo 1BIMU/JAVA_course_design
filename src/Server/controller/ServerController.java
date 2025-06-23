@@ -9,7 +9,6 @@ import io.FileIO;
 import io.IOStream;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
 import java.util.ArrayList;
@@ -372,15 +371,11 @@ public class ServerController {
 
         String fromUsername = voiceInfo.getFrom_username();
         ServerFrame.appendLog("接收到语音通话请求: 来自用户 " + fromUsername);
-        
-        // 获取发送者的实际IP地址
-        InetAddress clientAddress = socket.getInetAddress();
-        String realIpAddress = clientAddress.getHostAddress();
-        ServerFrame.appendLog("发送方真实IP地址: " + realIpAddress);
-        
-        // 将实际IP添加到Voice_info对象中
-        voiceInfo.setReal_host(realIpAddress);
-        INFO.set_voice_info(voiceInfo);
+
+        // 获取当前客户端的真实IP地址并设置到Voice_info中
+        String clientRealIP = socket.getInetAddress().getHostAddress();
+        voiceInfo.setServerDetectedHost(clientRealIP);
+        ServerFrame.appendLog("检测到用户 " + fromUsername + " 的真实IP地址: " + clientRealIP);
 
         // 转发语音通话消息给目标用户
         List<String> participants = voiceInfo.getParticipants();
@@ -389,9 +384,9 @@ public class ServerController {
                 // 获取目标用户的Socket
                 Socket targetSocket = server.getSocketByUsername(participant);
                 if (targetSocket != null && !targetSocket.isClosed()) {
-                    // 转发语音通话消息
+                    // 转发语音通话消息(包含发送方的真实IP)
                     IOStream.writeMessage(targetSocket, INFO);
-                    ServerFrame.appendLog("转发语音通话消息到用户: " + participant);
+                    ServerFrame.appendLog("转发语音通话消息到用户: " + participant + ", 包含发送方真实IP: " + clientRealIP);
                 } else {
                     // 目标用户不在线，发送错误响应给发起者
                     ServerFrame.appendLog("用户 " + participant + " 不在线，无法接收语音通话");

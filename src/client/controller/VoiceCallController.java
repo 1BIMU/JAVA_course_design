@@ -163,7 +163,18 @@ public class VoiceCallController {
             String localHost = getLocalIpAddress();
 
             // 保存对方的主机信息，用于后续音频流建立
-            String remoteHost = voiceInfo.getHost();
+            // 优先使用服务端检测到的IP地址
+            String remoteHost = null;
+            if (pendingRemoteEndpoints != null && pendingRemoteEndpoints.containsKey(callId)) {
+                Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
+                remoteHost = remoteInfo.getHost();
+                System.out.println("使用预先保存的主机信息: " + remoteHost);
+            } else {
+                remoteHost = voiceInfo.getServerDetectedHost() != null ? 
+                    voiceInfo.getServerDetectedHost() : voiceInfo.getHost();
+                System.out.println("使用" + (voiceInfo.getServerDetectedHost() != null ? "服务端检测的IP" : "客户端报告的IP") + 
+                                 ": " + remoteHost);
+            }
             int remotePort = voiceInfo.getPort();
 
             // 设置本地主机信息
@@ -339,16 +350,21 @@ public class VoiceCallController {
         if (isInitiator && activeCallViews.containsKey(voiceInfo.getCall_id())) {
             return;
         }
-        
-        // 检查是否有服务器提供的真实IP地址
-        String realHost = voiceInfo.getReal_host();
-        if (realHost != null && !realHost.isEmpty()) {
-            System.out.println("使用服务器提供的真实IP地址: " + realHost);
-            // 保存原始host
-            String originalHost = voiceInfo.getHost();
-            // 使用真实IP替换原始host
-            voiceInfo.setHost(realHost);
-            System.out.println("IP地址已从 " + originalHost + " 替换为 " + realHost);
+
+        // 保存远程主机信息，优先使用服务端检测到的IP地址
+        if (voiceInfo.getServerDetectedHost() != null && !voiceInfo.getServerDetectedHost().isEmpty()) {
+            // 预先保存远程主机信息
+            if (pendingRemoteEndpoints == null) {
+                pendingRemoteEndpoints = new HashMap<>();
+            }
+            
+            Voice_info remoteInfo = new Voice_info();
+            remoteInfo.setCall_id(voiceInfo.getCall_id());
+            remoteInfo.setHost(voiceInfo.getServerDetectedHost());
+            remoteInfo.setPort(voiceInfo.getPort());
+            pendingRemoteEndpoints.put(voiceInfo.getCall_id(), remoteInfo);
+            
+            System.out.println("保存来电者的服务端检测IP: " + voiceInfo.getServerDetectedHost() + ":" + voiceInfo.getPort());
         }
 
         // 显示来电界面
@@ -369,21 +385,17 @@ public class VoiceCallController {
 
         // 更新UI状态
         callView.updateCallStatus(Voice_info.CallStatus.CONNECTING);
-        
-        // 检查是否有服务器提供的真实IP地址
-        String realHost = voiceInfo.getReal_host();
-        if (realHost != null && !realHost.isEmpty()) {
-            System.out.println("使用服务器提供的真实IP地址: " + realHost);
-            // 保存原始host
-            String originalHost = voiceInfo.getHost();
-            // 使用真实IP替换原始host
-            voiceInfo.setHost(realHost);
-            System.out.println("IP地址已从 " + originalHost + " 替换为 " + realHost);
-        }
 
         if (isInitiator) {
-            // 保存远程主机信息
-            String remoteHost = voiceInfo.getHost();
+            // 保存远程主机信息，优先使用服务端检测到的IP
+            String remoteHost = voiceInfo.getServerDetectedHost();
+            // 如果服务端未检测到IP，则使用客户端报告的IP
+            if (remoteHost == null || remoteHost.isEmpty()) {
+                remoteHost = voiceInfo.getHost();
+                System.out.println("使用客户端报告的IP: " + remoteHost);
+            } else {
+                System.out.println("使用服务端检测到的IP: " + remoteHost);
+            }
             int remotePort = voiceInfo.getPort();
             
             if (remoteHost != null && !remoteHost.isEmpty()) {
@@ -405,12 +417,7 @@ public class VoiceCallController {
             // 检查是否有保存的远程主机信息
             if (pendingRemoteEndpoints != null && pendingRemoteEndpoints.containsKey(callId)) {
                 Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
-                // 如果服务器提供了真实IP，优先使用真实IP
-                if (realHost != null && !realHost.isEmpty()) {
-                    voiceInfo.setHost(realHost);
-                } else {
-                    voiceInfo.setHost(remoteInfo.getHost());
-                }
+                voiceInfo.setHost(remoteInfo.getHost());
                 voiceInfo.setPort(remoteInfo.getPort());
             }
 
@@ -503,9 +510,32 @@ public class VoiceCallController {
         // 更新UI状态
         callView.updateCallStatus(Voice_info.CallStatus.CONNECTED);
 
+        // 在连接前修正远程主机信息
+        if (voiceInfo.getServerDetectedHost() != null && !voiceInfo.getServerDetectedHost().isEmpty()) {
+            // 将服务端检测到的IP地址保存到pendingRemoteEndpoints中
+            if (pendingRemoteEndpoints == null) {
+                pendingRemoteEndpoints = new HashMap<>();
+            }
+            
+            Voice_info remoteInfo = new Voice_info();
+            remoteInfo.setCall_id(callId);
+            remoteInfo.setHost(voiceInfo.getServerDetectedHost());
+            remoteInfo.setPort(voiceInfo.getPort());
+            pendingRemoteEndpoints.put(callId, remoteInfo);
+            
+            System.out.println("使用服务端检测的IP地址建立连接: " + voiceInfo.getServerDetectedHost());
+        }
+
         // 检查音频流是否已启动
         if (!audioStreamManagers.containsKey(callId)) {
             startAudioStream(voiceInfo);
+        } else {
+            // 如果音频流已经启动，但获取到新的IP地址信息，更新远程端点
+            AudioStreamManager streamManager = audioStreamManagers.get(callId);
+            if (streamManager != null && voiceInfo.getServerDetectedHost() != null && !voiceInfo.getServerDetectedHost().isEmpty()) {
+                streamManager.setRemoteEndpoint(voiceInfo.getServerDetectedHost(), voiceInfo.getPort());
+                System.out.println("更新音频流的远程端点: " + voiceInfo.getServerDetectedHost() + ":" + voiceInfo.getPort());
+            }
         }
 
         // 更新通话信息
@@ -592,21 +622,16 @@ public class VoiceCallController {
             // 获取本地IP地址
             String localHost = getLocalIpAddress();
 
-            // 获取远程主机信息，优先使用服务器提供的真实IP
-            String remoteHost = null;
-            int remotePort = 0;
-            
-            // 检查是否有服务器提供的真实IP
-            String realHost = voiceInfo.getReal_host();
-            if (realHost != null && !realHost.isEmpty()) {
-                remoteHost = realHost;
-                remotePort = voiceInfo.getPort();
-                System.out.println("使用服务器提供的真实IP地址连接: " + remoteHost);
-            } else {
-                // 使用客户端提供的IP
+            // 获取远程主机信息，优先使用服务端检测到的IP
+            String remoteHost = voiceInfo.getServerDetectedHost();
+            // 如果服务端未检测到IP，则使用客户端报告的IP
+            if (remoteHost == null || remoteHost.isEmpty()) {
                 remoteHost = voiceInfo.getHost();
-                remotePort = voiceInfo.getPort();
+                System.out.println("使用客户端报告的IP: " + remoteHost);
+            } else {
+                System.out.println("使用服务端检测到的IP: " + remoteHost);
             }
+            int remotePort = voiceInfo.getPort();
 
             // 检查是否需要从pendingRemoteEndpoints获取远程主机信息
             if ((remoteHost == null || remoteHost.isEmpty() || remotePort == 0) && 
@@ -614,13 +639,7 @@ public class VoiceCallController {
                 pendingRemoteEndpoints.containsKey(callId)) {
                 
                 Voice_info remoteInfo = pendingRemoteEndpoints.get(callId);
-                // 如果remoteInfo中有真实IP，优先使用
-                if (remoteInfo.getReal_host() != null && !remoteInfo.getReal_host().isEmpty()) {
-                    remoteHost = remoteInfo.getReal_host();
-                    System.out.println("使用存储的真实IP地址连接: " + remoteHost);
-                } else {
-                    remoteHost = remoteInfo.getHost();
-                }
+                remoteHost = remoteInfo.getHost();
                 remotePort = remoteInfo.getPort();
             }
 
