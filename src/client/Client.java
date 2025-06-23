@@ -10,14 +10,6 @@ import client.controller.LoginController.LoginCallback;
 import client.model.ClientModel;
 import client.view.ContactListView;
 
-/* 
-    一些边写边学的记录：
-        * 通知机制：
-            * 在 LoginController 类中添加了 setLoginCallback 方法，用于设置回调对象；
-            * 在 onLoginSuccess 方法中，检查回调是否存在，如果存在则调用其 onLoginSuccess 方法；
-            * 作用：允许 LoginController 类在登录成功时通知 Client 类处理相关事件，而不需要直接创建 ChatView 或 ChatController 等对象，保持了类之间的松耦合；
-*/
-
 /*
     客户端主类，负责初始化客户端并管理控制器
 */
@@ -141,10 +133,6 @@ public class Client implements LoginCallback {
         client.start();
     }
     
-    /* 一些说明：
-        以下的 2 个方法实现了 LoginCallback 接口，使得 LoginController 能够通知 Client 类处理这些事件；
-    */
-
     /*
         实现LoginCallback接口的onLoginSuccess方法
         当用户登录成功时，创建联系人列表视图并显示

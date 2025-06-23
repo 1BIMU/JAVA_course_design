@@ -23,10 +23,6 @@ import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /*
-    一些说明：通过视图中的接口与视图组件进行交互
-*/
-
-/*
     聊天控制器，处理聊天相关的业务逻辑
 */
 public class ChatController {

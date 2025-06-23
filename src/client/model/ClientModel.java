@@ -14,18 +14,6 @@ import info.Org_info;
     客户端数据模型，管理客户端的状态和数据
 */
 
-/*
-    一些给服务端的说明：
-        主要功能包括：管理当前用户信息、在线用户列表、群组信息和消息历史
-        对于所有需要管理的数据提供了获取和修改数据的方法
-        一些数据结构待定，比如管理群聊的
-        我使用了观察者模式，当数据变化时通知观察者
-        使用 CopyOnWriteArrayList 存储观察者是为了保证线程安全
-
-        对客户端的数据进行了封装，所有数据都是私有的，只能通过公共方法访问
-        返回给其他类的数据都是深拷贝的，避免外部类错误修改数据
-*/
-
 public class ClientModel {
     // 当前登录的用户名
     private String currentUser;
@@ -36,10 +24,10 @@ public class ClientModel {
     // 群组信息映射表 <群组ID, 群组信息>
     private Map<Integer, Group_info> groups;
     // 小组信息映射表 <群组ID, 群组信息>
-    private Map<Integer, Org_info> orgs;//TODO: 这里的具体逻辑待服务端实现
+    private Map<Integer, Org_info> orgs;
     private List<Org_info> pendingTeamInvitations;//待处理邀请
     // 聊天消息历史记录
-    private List<Chat_info> messageHistory;   //TODO:这里的具体逻辑待服务端实现
+    private List<Chat_info> messageHistory;
     // 最新的聊天消息
     private Chat_info lastChatMessage;
     // 登录状态

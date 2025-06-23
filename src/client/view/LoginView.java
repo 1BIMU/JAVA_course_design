@@ -27,32 +27,6 @@ import javax.swing.UIManager;
 import client.controller.LoginController;
 
 /*
-    一些说明：
-        这里没什么注意到，主要是美化了一下 UI：
-            * 使用 CardLayout 实现登录和注册面板的切换；
-            * 采用 GridBagLayout 和 BorderLayout 布局管理器，创建表单界面；
-            * 以及其他一些组件；
-        
-        处理用户交互上：
-            * 登录按钮：调用控制器的 login 方法处理登录请求
-            * 注册按钮：调用控制器的 register 方法处理注册请求
-            * 切换按钮：在登录和注册面板之间切换
-        
-        状态反馈上：
-            * showError：显示错误消息，使用红色字体
-            * showMessage：显示普通消息，使用绿色字体
-            * showLoginInProgress/showRegisterInProgress：显示操作进行中的状态
-        
-        表单控制：通过 resetLoginForm/resetRegisterForm 重置表单状态；
-
-*/
-
-/*
-    一些边写边学的记录：
-        * 使用 SwingUtilities.invokeLater 确保所有UI更新在EDT(Event Dispatch Thread)线程中执行，避免多线程安全问题；
-*/
-
-/*
     登录UI，提供登录和注册界面
 */
 public class LoginView extends JFrame {

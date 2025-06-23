@@ -19,23 +19,6 @@ import io.IOStream;
     消息监听器，负责接收和处理后端，即服务器发送的消息
 */
 
-/*
-    给服务端的说明：
-        该监听器其实就是之前的的ClientHandler
-        作为独立线程运行，持续监听Socket输入流
-        重构是为了更好的把 UI 和消息处理逻辑分离
-        之前是 ClientHandler 在处理消息的同时，还负责UI的更新，
-        UI 现在只负责前端显示，不负责消息处理
-*/
-
-/* 
-    消息分发机制：
-        使用策略模式重构：
-            * 根据消息类型（info.get_type()）获取对应的处理器
-            * 将消息分发给对应的处理器处理
-            * 支持处理多种消息类型：登录(3)、聊天(4)、群组(1)、注册(5)、登出(2)
-*/
-
 public class MessageListener extends Thread {
     private Socket socket;   // 与服务器连接的Socket
     private ClientModel model; // 客户端数据模型
