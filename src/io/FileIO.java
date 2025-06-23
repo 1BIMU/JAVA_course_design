@@ -1,5 +1,7 @@
 package io;
 
+import info.Org_info;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -467,5 +469,201 @@ public class FileIO {
         
         return users;
     }
+
+    // --- NEW ---
+    // region 新增的小组(Org)相关操作，并添加了详细日志
+    /**
+     * 将小组信息写入文件 (新格式: orgId|parentGroupId|orgName|members)
+     * @param orgId 小组ID
+     * @param parentGroupId 父群聊ID
+     * @param orgName 小组名称
+     * @param members 成员列表
+     * @throws IOException
+     */
+    public void writeOrg(int orgId, int parentGroupId, String orgName, ArrayList<String> members) throws IOException {
+        Path orgFilePath = this.groupFilePath;
+        // --- NEW LOGGING ---
+        System.out.println("[FileIO.writeOrg] 准备写入小组到文件: " + orgFilePath.toAbsolutePath());
+
+        List<String> orgs = Files.exists(orgFilePath) ?
+                Files.readAllLines(orgFilePath) :
+                new ArrayList<>();
+
+        orgs.removeIf(line -> line.startsWith(orgId + "|"));
+
+        String record = orgId + "|" + parentGroupId + "|" + orgName + "|" + String.join(",", members);
+        // --- NEW LOGGING ---
+        System.out.println("[FileIO.writeOrg] 待写入的记录: " + record);
+        orgs.add(record);
+
+        Files.write(orgFilePath, orgs, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        // --- NEW LOGGING ---
+        System.out.println("[FileIO.writeOrg] 写入成功.");
+    }
+
+    /**
+     * 通过用户获取其所属的所有小组信息
+     * @param username 用户名
+     * @return 包含该用户的小组信息列表
+     * @throws IOException
+     */
+    public ArrayList<Org_info> getAllOrgsByUser(String username) throws IOException {
+        Path orgFilePath = this.groupFilePath;
+        // --- NEW LOGGING ---
+        System.out.println("[FileIO.getAllOrgsByUser] 为用户 '" + username + "' 读取小组信息，文件路径: " + orgFilePath.toAbsolutePath());
+
+        ArrayList<Org_info> userOrgs = new ArrayList<>();
+
+        if (!Files.exists(orgFilePath)) {
+            // --- NEW LOGGING ---
+            System.out.println("[FileIO.getAllOrgsByUser] 文件不存在: " + orgFilePath.toAbsolutePath());
+            return userOrgs;
+        }
+
+        List<String> lines = Files.readAllLines(orgFilePath);
+        // --- NEW LOGGING ---
+        System.out.println("[FileIO.getAllOrgsByUser] 文件存在，共 " + lines.size() + " 行。");
+
+        for (String line : lines) {
+            // --- NEW LOGGING ---
+            System.out.println("[FileIO.getAllOrgsByUser] 正在处理行: " + line);
+            String[] parts = line.split("\\|");
+            if (parts.length >= 4) { // 新格式: orgId|parentGroupId|orgName|members
+                List<String> members = Arrays.asList(parts[3].split(","));
+                // --- NEW LOGGING ---
+                System.out.println("[FileIO.getAllOrgsByUser] 解析出的成员: " + members);
+
+                if (members.contains(username)) {
+                    // --- NEW LOGGING ---
+                    System.out.println("[FileIO.getAllOrgsByUser] 成功：在此小组中找到用户 '" + username + "'。");
+                    try {
+                        Org_info org = new Org_info();
+                        org.setOrg_id(Integer.parseInt(parts[0]));
+                        org.setGroup_id(Integer.parseInt(parts[1]));
+                        org.setOrg_name(parts[2]);
+                        org.setMembers(new ArrayList<>(members));
+                        userOrgs.add(org);
+                    } catch (NumberFormatException e) {
+                        System.err.println("[FileIO.getAllOrgsByUser] 警告：无法解析行内数字: " + line);
+                    }
+                } else {
+                    // --- NEW LOGGING ---
+                    System.out.println("[FileIO.getAllOrgsByUser] 信息：用户 '" + username + "' 不在此小组成员列表中。");
+                }
+            } else {
+                // --- NEW LOGGING ---
+                System.err.println("[FileIO.getAllOrgsByUser] 警告：跳过格式错误的行 (字段数少于4): " + line);
+            }
+        }
+        // --- NEW LOGGING ---
+        System.out.println("[FileIO.getAllOrgsByUser] 处理完毕。为用户 '" + username + "' 找到 " + userOrgs.size() + " 个小组。");
+        return userOrgs;
+    }
+
+    /**
+     * 获取指定小组的完整信息
+     * @param orgId 小组ID
+     * @return Org_info 对象, 如果未找到则为 null
+     * @throws IOException
+     */
+    public Org_info getOrgInfo(int orgId) throws IOException {
+        Path orgFilePath = this.groupFilePath; // 假设此实例用于orgs.dat
+        if (!Files.exists(orgFilePath)) return null;
+
+        return Files.lines(orgFilePath)
+                .filter(line -> line.startsWith(orgId + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    if (parts.length >= 4) { // 新格式
+                        try {
+                            Org_info org = new Org_info();
+                            org.setOrg_id(Integer.parseInt(parts[0]));
+                            org.setGroup_id(Integer.parseInt(parts[1]));
+                            org.setOrg_name(parts[2]);
+                            org.setMembers(new ArrayList<>(Arrays.asList(parts[3].split(","))));
+                            return org;
+                        } catch (NumberFormatException e) {
+                            return null;
+                        }
+                    }
+                    return null;
+                })
+                .orElse(null);
+    }
+
+    /**
+     * 获取指定小组的成员列表 (新方法，用于 orgs.dat)
+     * @param orgId 小组ID
+     * @return 成员列表
+     * @throws IOException
+     */
+    public ArrayList<String> getOrgMembers(int orgId) throws IOException {
+        Path orgFilePath = this.groupFilePath; // 假设此实例用于orgs.dat
+        if (!Files.exists(orgFilePath)) return null;
+
+        return Files.lines(orgFilePath)
+                .filter(line -> line.startsWith(orgId + "|"))
+                .findFirst()
+                .map(line -> {
+                    String[] parts = line.split("\\|");
+                    if (parts.length < 4 || parts[3].isEmpty()) {
+                        return new ArrayList<String>();
+                    }
+                    return new ArrayList<>(Arrays.asList(parts[3].split(",")));
+                })
+                .orElse(null);
+    }
+
+    /**
+     * 管理小组的成员（添加/删除），适配新文件格式
+     * @param orgId 小组ID
+     * @param addUsers 要添加的用户列表
+     * @param removeUsers 要删除的用户列表
+     * @throws IOException
+     */
+    public void manageOrgMembers(int orgId, ArrayList<String> addUsers, ArrayList<String> removeUsers) throws IOException {
+        Path orgFilePath = this.groupFilePath;
+        List<String> orgs = Files.exists(orgFilePath) ?
+                Files.readAllLines(orgFilePath) :
+                new ArrayList<>();
+
+        boolean found = false;
+        for (int i = 0; i < orgs.size(); i++) {
+            String line = orgs.get(i);
+            if (line.startsWith(orgId + "|")) {
+                found = true;
+                String[] parts = line.split("\\|");
+                // 保持 parentGroupId 和 orgName
+                String parentGroupIdStr = parts[1];
+                String orgName = parts[2];
+                ArrayList<String> members = (parts.length < 4 || parts[3].isEmpty()) ? new ArrayList<>() : new ArrayList<>(Arrays.asList(parts[3].split(",")));
+
+                // 添加新成员 (去重)
+                if (addUsers != null) {
+                    for (String user : addUsers) {
+                        if (!members.contains(user)) {
+                            members.add(user);
+                        }
+                    }
+                }
+                // 移除成员
+                if (removeUsers != null) {
+                    members.removeAll(removeUsers);
+                }
+
+                // 更新行记录
+                orgs.set(i, orgId + "|" + parentGroupIdStr + "|" + orgName + "|" + String.join(",", members));
+                break;
+            }
+        }
+
+        if (!found) {
+            throw new IllegalArgumentException("小组 " + orgId + " 不存在，无法修改成员。");
+        }
+
+        Files.write(orgFilePath, orgs, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
+    // endregion
 }
 

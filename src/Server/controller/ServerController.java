@@ -1,3 +1,5 @@
+// ====== FILE: src\Server\controller\ServerController.java ======
+
 package Server.controller;
 
 import Server.ChatServer;
@@ -102,16 +104,19 @@ public class ServerController {
 
         // 添加小组信息
         FileIO fileio_org = new FileIO("users.dat", "orgs.dat");
-        ArrayList<Integer> orgs = fileio_org.getGroupsByUser(current_user);
-        Map<Integer, ArrayList<String>> orgMap = model.groupMap(orgs,fileio_org);
+        ArrayList<Org_info> userOrgs = fileio_org.getAllOrgsByUser(current_user);
+        ArrayList<Integer> orgIDs = new ArrayList<>();
+        Map<Integer, ArrayList<String>> orgMap = new HashMap<>();
         Map<Integer, String> orgNameMap = new HashMap<>();
-        for (Integer orgId : orgs) {
-            orgNameMap.put(orgId, fileio_org.getGroupName(orgId));
+        for (Org_info org : userOrgs) {
+            orgIDs.add(org.getOrg_id());
+            orgMap.put(org.getOrg_id(), org.getMembers());
+            orgNameMap.put(org.getOrg_id(), org.getOrg_name());
         }
-        detailedResponseInfo.setOrgIDList(orgs);
+        detailedResponseInfo.setOrgIDList(orgIDs);
         detailedResponseInfo.setOrgMap(orgMap);
         detailedResponseInfo.setOrgNameMap(orgNameMap);
-        ServerFrame.appendLog("为用户 " + current_user + " 同步 " + orgs.size() + " 个小组信息。");
+        ServerFrame.appendLog("为用户 " + current_user + " 同步 " + userOrgs.size() + " 个小组信息。");
 
         // 5. 发送详细回执给当前登录者
         RETURN.set_login_info(detailedResponseInfo);
@@ -133,10 +138,10 @@ public class ServerController {
         ArrayList<String> members;
         if(ci.isType()){//如果是群聊消息
             if (ci.isOrg()) {
-                // 如果是小组消息, 从 orgs.dat 文件读取
+                // 如果是小组消息, 从 orgs.dat 文件读取，并使用新的 getOrgMembers 方法
                 ServerFrame.appendLog("处理小组聊天消息，小组ID: " + targetId);
                 FileIO teamFileIO = new FileIO("users.dat", "orgs.dat");
-                members = teamFileIO.getGroupMembers(targetId);
+                members = teamFileIO.getOrgMembers(targetId);
             } else {
                 // 否则，是普通群聊消息, 从 groups.dat 文件读取
                 ServerFrame.appendLog("处理群聊消息，群聊ID: " + targetId);
@@ -243,41 +248,42 @@ public class ServerController {
     public void LogoutHandler(encap_info INFO, encap_info RETURN) throws IOException {
         //维护相关动态表格
         ServerFrame.appendLog("用户 " + current_user + " 正在注销");
-        
+
         // 获取所有注册用户列表
         FileIO FI = new FileIO();
         ArrayList<String> allUsers = FI.getAllUsers();
-        
+
         // 先创建登出通知消息，在移除用户前准备好消息
         Login_info logoutInfo = new Login_info();
         logoutInfo.setUserName(current_user);
         logoutInfo.setLoginSuccessFlag(false); // 设置为false表示用户下线
         logoutInfo.setOnlineUsers(new ArrayList<>(server.online_users)); // 复制当前在线用户列表
         logoutInfo.setAllUsers(allUsers); // 设置所有注册用户列表
-        
+
         // 从在线用户列表中移除当前用户
         this.server.userSocketMap.remove(current_user);
         this.server.online_users.remove(current_user);
-        
+
         // 更新服务器界面的用户列表
         ServerFrame.updateUserList(server.online_users);
         this.server.online_sockets.remove(socket);
-        
+
         // 更新登出通知消息中的在线用户列表（已移除当前用户）
         logoutInfo.setOnlineUsers(server.online_users);
-        
+
         // 创建广播消息
         encap_info broadcastInfo = new encap_info();
         broadcastInfo.set_type(3); // 登录/登出消息类型
         broadcastInfo.set_login_info(logoutInfo);
-        
+
         // 广播用户下线消息给所有在线用户
         ServerFrame.appendLog("广播用户 " + current_user + " 下线消息给所有在线用户");
         model.sendALL(broadcastInfo);
-        
+
         ServerFrame.appendLog("用户 " + current_user + " 已成功注销");
         ServerFrame.appendLog("当前在线用户: " + server.online_users);
     }
+
     public void Org_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Org_info oi = INFO.get_org_info();
         FileIO fileio_org = new FileIO("users.dat", "orgs.dat");//新建的一个组的数据文件
@@ -286,11 +292,29 @@ public class ServerController {
         ArrayList<String> org_members = oi.getMembers();
         ArrayList<String> group_members = fileio_group.getGroupMembers(group_id);
         if (oi.getType() == 1) {//如果是建立组的消息
-            ServerFrame.appendLog(current_user + " 尝试创建新群内的组");
-            boolean flag = model.IsInGroup(group_members, org_members);
-            if (!fileio_group.groupExists(group_id) || flag || isAnyMemberAlreadyInTeam(oi.getMembers(), fileio_org)) {//如果群聊不存在，或者有人不在群聊中，那么告诉它，建立错误就行了
-                ServerFrame.appendLog("错误，在尝试创建成员为： " + org_members + "的组时发生错误，该群聊不存在，或者组中有人不在群聊中，或者有人已经有小组了，返回报错信息");
-                //后续可以考虑加个错误信息啥的，这里先不做了
+            System.out.println("[ServerController.Org_handler] 收到小组创建请求:");
+            System.out.println("[ServerController.Org_handler]   - 来自用户: " + oi.getFromUser());
+            System.out.println("[ServerController.Org_handler]   - 父群聊ID: " + oi.getGroup_id());
+            System.out.println("[ServerController.Org_handler]   - 小组名称: " + oi.getOrg_name());
+            System.out.println("[ServerController.Org_handler]   - 拟定成员: " + oi.getMembers());
+
+            // 检查1: 拟定的小组成员是否都在父群聊中?
+            // IsInGroup 方法如果发现有成员不在群聊中，会返回 true。所以它代表“有问题”。
+            boolean problem_memberMissing = (group_members == null || model.IsInGroup(group_members, org_members));
+            System.out.println("[ServerController.Org_handler] 检查1 (是否有成员不在父群聊中?): " + problem_memberMissing);
+
+            // 检查2: 拟定的成员是否已经在这个父群聊的其他小组里了?
+            boolean problem_memberConflict = isAnyMemberInTeamForGroup(org_members, group_id, fileio_org);
+            System.out.println("[ServerController.Org_handler] 检查2 (是否有成员已在此群聊的其他小组中?): " + problem_memberConflict);
+
+            // 最终判断
+            if (!fileio_group.groupExists(group_id) || problem_memberMissing || problem_memberConflict) {
+                String errorReason = "";
+                if (!fileio_group.groupExists(group_id)) errorReason = "父群聊不存在";
+                else if (problem_memberMissing) errorReason = "有成员不属于该父群聊";
+                else if (problem_memberConflict) errorReason = "有成员已在该群聊的其他小组中";
+
+                ServerFrame.appendLog("创建小组失败: " + errorReason);
                 oi.setSuccess(false);
                 ArrayList<String> back_user = new ArrayList<>();
                 back_user.add(current_user);
@@ -298,6 +322,7 @@ public class ServerController {
                 model.Send2Users(INFO, back_user);
                 return;
             } else oi.setSuccess(true);
+
             //为这个群聊分配一个随机ID
             int ID;
             while (true) {
@@ -312,11 +337,15 @@ public class ServerController {
             ServerFrame.appendLog("创建新组 ID: " + ID + "，初始成员: " + oi.getFromUser());
             ArrayList<String> creatorList = new ArrayList<>();
             creatorList.add(oi.getFromUser());
-            fileio_org.writeGroup(ID, oi.getOrg_name(), creatorList);
+
+            // 使用新的 writeOrg 方法，将 parentGroupId 写入文件
+            fileio_org.writeOrg(ID, group_id, oi.getOrg_name(), creatorList);
 
             //把这些人都加入到哈希表的维护中
-            group_members.remove(oi.getFromUser());
-            model.addUserByOrgID(group_id, group_members);
+            if (group_members != null) {
+                group_members.remove(oi.getFromUser());
+                model.addUserByOrgID(group_id, group_members);
+            }
 
             Org_info creationSuccessInfo = new Org_info();
             creationSuccessInfo.setSuccess(true);
@@ -336,6 +365,10 @@ public class ServerController {
             ArrayList<String> invitees = new ArrayList<>(org_members);
             invitees.remove(oi.getFromUser());
 
+            // --- MODIFIED --- 先过滤出在线的被邀请者，再发送邀请
+            model.filterOnlineMembers(invitees, server.online_users);
+            ServerFrame.appendLog("筛选后在线的被邀请者: " + invitees);
+
             if (!invitees.isEmpty()) {
                 // 准备邀请消息
                 oi.setOrg_id(ID);
@@ -349,18 +382,19 @@ public class ServerController {
                 invitationBroadcast.set_org_info(oi);
 
                 model.Send2Users(invitationBroadcast, invitees);
-                ServerFrame.appendLog("已向 " + invitees + " 发送小组邀请。");
+                ServerFrame.appendLog("已向在线的被邀请者 " + invitees + " 发送小组邀请。");
             }
         } else if (oi.getType() == 4) {//如果不是建立群聊，那么是对文件中进行修改
-            ServerFrame.appendLog("修改群组 " + oi.getOrg_id() + " 的成员");
-            FileIO fileio = new FileIO();
+            // 修复了修改小组成员的逻辑
+            ServerFrame.appendLog("修改小组 " + oi.getOrg_id() + " 的成员");
             ArrayList<String> added_people = oi.getAdded_people();
             ArrayList<String> removed_people = oi.getRemoved_people();
-            if (!fileio_group.groupExists(group_id) ||
-                    model.IsInGroup(org_members, removed_people) ||
-                    model.IsInGroup(group_members, added_people)) {
-                ServerFrame.appendLog("发生错误，在尝试添加用户 " + added_people + " 并删去用户" + removed_people +
-                        " 时发生错误");
+
+            // 检查要添加的人是否在父群聊中
+            boolean addedPeopleValid = (group_members != null && model.IsInGroup(group_members, added_people));
+            if (!addedPeopleValid) {
+                ServerFrame.appendLog("错误：尝试添加的成员不在父群聊中。");
+                // 返回错误信息
                 oi.setSuccess(false);
                 ArrayList<String> back_user = new ArrayList<>();
                 back_user.add(current_user);
@@ -368,7 +402,10 @@ public class ServerController {
                 model.Send2Users(INFO, back_user);
                 return;
             }
-            fileio.manageGroupMembers(oi.getOrg_id(), added_people, removed_people);
+
+            // 使用新的 manageOrgMembers 方法
+            fileio_org.manageOrgMembers(oi.getOrg_id(), added_people, removed_people);
+
             ServerFrame.appendLog("添加成员: " + added_people);
             //然后发消息，通知added_people被添加
             Org_info added = oi;
@@ -377,6 +414,7 @@ public class ServerController {
             added.setSuccess(true);
             RETURN.set_org_info(added);
             model.Send2Users(INFO, added_people);
+
             ServerFrame.appendLog("移除成员: " + removed_people);
             //发消息，告诉removed_people被删除
             Org_info removed = oi;
@@ -384,34 +422,32 @@ public class ServerController {
             removed.setExist(false);
             RETURN.set_org_info(removed);
             model.Send2Users(INFO, removed_people);
+
         } else if (oi.getType() == 3) {//如果接收到客户回复的同意邀请的结果，那么：
             if (oi.isSuccess()) {//如果确实是同意邀请
                 String fromUser = oi.getFromUser();
-                int orgId = oi.getOrg_id(); // 关键：使用正确的小组ID
-                String orgName = fileio_org.getGroupName(orgId);
+                int orgId = oi.getOrg_id();
+                int parentGroupId = oi.getGroup_id(); // 获取父群聊ID
 
-                ServerFrame.appendLog("用户 " + fromUser + " 接受了小组 " + orgName + " 的邀请。");
+                ServerFrame.appendLog("用户 " + fromUser + " 接受了小组 " + orgId + " 的邀请。");
 
-                // --- 正确的更新逻辑 ---
-                // 1. 先从文件读取该小组当前的完整成员列表
-                ArrayList<String> currentMembers = fileio_org.getGroupMembers(orgId);
-                if (currentMembers == null) {
-                    // 如果小组不存在，创建一个新的列表
-                    currentMembers = new ArrayList<>();
+                // 更新小组成员的逻辑
+                Org_info existingOrg = fileio_org.getOrgInfo(orgId);
+                if (existingOrg == null) {
+                    ServerFrame.appendLog("错误：用户 " + fromUser + " 尝试加入一个不存在的小组 ID: " + orgId);
+                    return;
                 }
+                String orgName = existingOrg.getOrg_name();
+                ArrayList<String> currentMembers = existingOrg.getMembers();
 
-                // 2. 将新成员添加进去 (如果不存在的话)
                 if (!currentMembers.contains(fromUser)) {
                     currentMembers.add(fromUser);
                 }
 
-                // 3. 将更新后的完整成员列表写回到文件
-                fileio_org.writeGroup(orgId, orgName, currentMembers);
+                // 使用新的 writeOrg 方法将包含父群聊ID的完整信息写回
+                fileio_org.writeOrg(orgId, parentGroupId, orgName, currentMembers);
                 ServerFrame.appendLog("已将 " + fromUser + " 添加到小组 " + orgId + "。当前成员: " + currentMembers);
 
-                // ------------------------
-
-                // 从待处理邀请列表中移除该用户 (如果需要的话，您的 model 里有这个逻辑)
                 model.removeUserByOrgID(orgId, fromUser);
 
                 // 准备并发送包含完整、最新信息的确认回执给客户端
@@ -436,16 +472,10 @@ public class ServerController {
                     model.Send2Users(RETURN, broadcastList);
                     ServerFrame.appendLog("已向小组成员 " + broadcastList + " 广播了成员更新。");
                 }
-
             }
         }
     }
-    /**Add commentMore actions
-     * 处理语音通话消息
-     * @param INFO 接收到的语音通话消息
-     * @param RETURN 响应消息
-     * @throws IOException 如果IO操作失败
-     */
+
     public void VoiceCall_handler(encap_info INFO, encap_info RETURN) throws IOException {
         Voice_info voiceInfo = INFO.get_voice_info();
         if (voiceInfo == null) return;
@@ -480,21 +510,32 @@ public class ServerController {
             }
         }
     }
+
     /**
-     * [新增辅助方法] 检查列表中是否有任何成员已经属于某个小组
+     * [新增辅助方法] 检查指定成员是否已在特定群聊的某个小组中
      * @param members 要检查的成员列表
-     * @param fileIo 指向 orgs.dat 的 FileIO 实例
-     * @return 如果至少有一人已在小组中，返回 true；否则返回 false
+     * @param parentGroupId 父群聊的ID
+     * @param orgFileIo 指向 orgs.dat 的 FileIO 实例
+     * @return 如果有任何一个成员已在该群聊的小组中，则返回 true
      */
-    private boolean isAnyMemberAlreadyInTeam(ArrayList<String> members, FileIO fileIo) throws IOException {
+    private boolean isAnyMemberInTeamForGroup(ArrayList<String> members, int parentGroupId, FileIO orgFileIo) throws IOException {
+        if (members == null) return false;
+
         for (String member : members) {
-            // 复用 getGroupsByUser 方法，检查该用户所在的小组列表是否为空
-            if (!fileIo.getGroupsByUser(member).isEmpty()) {
-                // 只要发现有一个成员已经有小组了，就立刻返回 true
-                return true;
+            // 获取该用户所属的所有小组
+            ArrayList<Org_info> userTeams = orgFileIo.getAllOrgsByUser(member);
+
+            // 检查这些小组中是否有任何一个属于当前的父群聊
+            for (Org_info team : userTeams) {
+                if (team.getGroup_id() == parentGroupId) {
+                    // 冲突：该成员已在此父群聊的某个小组中
+                    ServerFrame.appendLog("创建小组失败：成员 " + member + " 已在群聊 " + parentGroupId + " 的另一个小组中。");
+                    return true;
+                }
             }
         }
-        // 遍历完所有成员，都没发现有小组的，返回 false
+
+        // 所有成员都没有冲突
         return false;
     }
 }

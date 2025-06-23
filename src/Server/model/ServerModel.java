@@ -83,14 +83,19 @@ public class ServerModel {
     /*
     * 转发消息到指定用户
     * */
-    public void Send2Users(encap_info INFO,ArrayList<String> to_user){
-        if(to_user.size()==0){
+    public void Send2Users(encap_info INFO, ArrayList<String> to_user){
+        // --- MODIFIED --- 添加了安全检查
+        if(to_user == null || to_user.isEmpty()){
             return;
         }
-        for(int i = 0;i<to_user.size();i++) {
+        for(String user : to_user) {
             //先从hashmap中拿到对应用户的socket
-            Socket tempSocket = server.userSocketMap.get(to_user.get(i));
-            IOStream.writeMessage(tempSocket , INFO);
+            Socket tempSocket = server.userSocketMap.get(user);
+
+            // 安全检查：只在socket不为null时发送
+            if (tempSocket != null) {
+                IOStream.writeMessage(tempSocket , INFO);
+            }
         }
     }
     /*
