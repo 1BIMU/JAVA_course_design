@@ -27,12 +27,12 @@ public class Voice_info implements Serializable {
     private CallType callType;
     // 主机地址
     private String host;
+    // 服务器检测到的真实主机地址
+    private String real_host;
     // 端口号
     private int port;
     // 错误消息
     private String error_message;
-    // 额外信息（用于存储多个IP地址等辅助信息）
-    private Object extra;
 
     /**
      * 通话状态枚举
@@ -158,6 +158,22 @@ public class Voice_info implements Serializable {
         this.host = host;
     }
 
+    /**
+     * 获取服务器检测到的真实主机地址
+     * @return 真实主机地址
+     */
+    public String getReal_host() {
+        return real_host;
+    }
+
+    /**
+     * 设置服务器检测到的真实主机地址
+     * @param real_host 真实主机地址
+     */
+    public void setReal_host(String real_host) {
+        this.real_host = real_host;
+    }
+
     public int getPort() {
         return port;
     }
@@ -172,13 +188,5 @@ public class Voice_info implements Serializable {
 
     public void setError_message(String error_message) {
         this.error_message = error_message;
-    }
-    
-    public Object getExtra() {
-        return extra;
-    }
-
-    public void setExtra(Object extra) {
-        this.extra = extra;
     }
 }

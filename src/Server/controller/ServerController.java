@@ -9,6 +9,7 @@ import io.FileIO;
 import io.IOStream;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
 import java.util.ArrayList;
@@ -371,6 +372,15 @@ public class ServerController {
 
         String fromUsername = voiceInfo.getFrom_username();
         ServerFrame.appendLog("接收到语音通话请求: 来自用户 " + fromUsername);
+        
+        // 获取发送者的实际IP地址
+        InetAddress clientAddress = socket.getInetAddress();
+        String realIpAddress = clientAddress.getHostAddress();
+        ServerFrame.appendLog("发送方真实IP地址: " + realIpAddress);
+        
+        // 将实际IP添加到Voice_info对象中
+        voiceInfo.setReal_host(realIpAddress);
+        INFO.set_voice_info(voiceInfo);
 
         // 转发语音通话消息给目标用户
         List<String> participants = voiceInfo.getParticipants();

@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.HashMap;
 
 /**
  * 音频流管理器
@@ -283,11 +282,6 @@ public class AudioStreamManager {
                 long startTime = System.currentTimeMillis();
                 long lastReceiveTime = System.currentTimeMillis();
                 boolean receivedAny = false;
-                
-                // 用于动态发现和记录远程端点
-                Map<String, Integer> remoteEndpointHits = new HashMap<>();
-                String currentRemoteHost = remoteHost;
-                int currentRemotePort = remotePort;
 
                 while (receiving.get()) {
                     try {
@@ -308,99 +302,33 @@ public class AudioStreamManager {
                             String senderHost = packet.getAddress().getHostAddress();
                             int senderPort = packet.getPort();
                             
-                            // 记录远程端点命中次数，用于动态发现最佳端点
-                            String endpointKey = senderHost + ":" + senderPort;
-                            remoteEndpointHits.put(endpointKey, 
-                                remoteEndpointHits.getOrDefault(endpointKey, 0) + 1);
-                            
-                            // 如果收到的包数超过一定阈值，检查是否需要切换远程端点
-                            if (packetsReceived % 20 == 0 && !remoteEndpointHits.isEmpty()) {
-                                // 找出命中次数最多的端点
-                                String bestEndpoint = null;
-                                int maxHits = 0;
-                                
-                                for (Map.Entry<String, Integer> entry : remoteEndpointHits.entrySet()) {
-                                    if (entry.getValue() > maxHits) {
-                                        maxHits = entry.getValue();
-                                        bestEndpoint = entry.getKey();
-                                    }
-                                }
-                                
-                                if (bestEndpoint != null) {
-                                    String[] parts = bestEndpoint.split(":");
-                                    String bestHost = parts[0];
-                                    int bestPort = Integer.parseInt(parts[1]);
-                                    
-                                    // 如果最佳端点与当前不同，切换远程端点
-                                    if (!bestHost.equals(currentRemoteHost) || bestPort != currentRemotePort) {
-                                        System.out.println("动态切换远程端点到: " + bestEndpoint + 
-                                                         " (命中率: " + maxHits + ")");
-                                        remoteHost = bestHost;
-                                        remotePort = bestPort;
-                                        currentRemoteHost = bestHost;
-                                        currentRemotePort = bestPort;
-                                    }
-                                }
-                            }
-                            
                             // 如果远程主机地址未设置，则使用第一个接收到的包的源地址和端口
                             if (remoteHost == null || remoteHost.isEmpty() || remotePort == 0) {
                                 remoteHost = senderHost;
                                 remotePort = senderPort;
-                                currentRemoteHost = senderHost;
-                                currentRemotePort = senderPort;
                                 System.out.println("自动设置远程主机: " + remoteHost + ":" + remotePort);
                             }
                             
                             // 检查数据包大小
                             int packetLength = packet.getLength();
                             
-                            // 处理控制包
+                            // 简化控制包处理，只识别必要的类型
                             if (packetLength == 4) {
                                 byte[] controlData = Arrays.copyOf(packet.getData(), 4);
                                 int controlType = java.nio.ByteBuffer.wrap(controlData).getInt();
                                 
-                                // 控制包类型
+                                // 简化为两种控制包: 连接包和保活包
                                 if (controlType == 0x434F4E4E) { // "CONN"的ASCII码
                                     System.out.println("收到连接包，建立连接: " + senderHost + ":" + senderPort);
                                     sendConnectAckPacket(packet.getAddress(), packet.getPort());
-                                    
-                                    // 更新远程端点为发送连接包的地址
                                     remoteHost = senderHost;
                                     remotePort = senderPort;
-                                    currentRemoteHost = senderHost;
-                                    currentRemotePort = senderPort;
-                                    
                                     continue;
                                 } else if (controlType == 0x4B414C56) { // "KALV"的ASCII码
                                     // 收到保活包，只记录日志
                                     System.out.println("收到保活包");
                                     continue;
-                                } else if (controlType == 0x54455354) { // "TEST"的ASCII码
-                                    // 收到测试包，回复确认
-                                    System.out.println("收到测试包，回复确认: " + senderHost + ":" + senderPort);
-                                    sendTestAckPacket(packet.getAddress(), packet.getPort());
-                                    
-                                    // 更新远程端点为发送测试包的地址
-                                    remoteHost = senderHost;
-                                    remotePort = senderPort;
-                                    currentRemoteHost = senderHost;
-                                    currentRemotePort = senderPort;
-                                    
-                                    continue;
                                 }
-                            } else if (packetLength == 4 && new String(Arrays.copyOf(packet.getData(), 4)).equals("TEST")) {
-                                // 兼容文本格式的测试包
-                                System.out.println("收到文本测试包，回复确认: " + senderHost + ":" + senderPort);
-                                sendTestAckPacket(packet.getAddress(), packet.getPort());
-                                
-                                // 更新远程端点为发送测试包的地址
-                                remoteHost = senderHost;
-                                remotePort = senderPort;
-                                currentRemoteHost = senderHost;
-                                currentRemotePort = senderPort;
-                                
-                                continue;
                             }
                             
                             // 检查数据长度是否符合音频帧要求(2字节的整数倍)
@@ -611,38 +539,6 @@ public class AudioStreamManager {
             
         } catch (Exception e) {
             System.err.println("发送保活包失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 发送测试确认包
-     * @param address 目标地址
-     * @param port 目标端口
-     * @throws IOException 如果发送失败
-     */
-    private void sendTestAckPacket(InetAddress address, int port) throws IOException {
-        if (socket == null || socket.isClosed()) {
-            return;
-        }
-
-        try {
-            // 创建一个4字节的控制包，ASCII码为"TACK"
-            byte[] ackData = new byte[4];
-            java.nio.ByteBuffer.wrap(ackData).putInt(0x5441434B); // "TACK"
-            
-            // 创建数据包
-            DatagramPacket packet = new DatagramPacket(
-                    ackData, ackData.length,
-                    address,
-                    port
-            );
-
-            // 发送数据包
-            socket.send(packet);
-            System.out.println("发送测试确认包: " + address.getHostAddress() + ":" + port);
-            
-        } catch (Exception e) {
-            System.err.println("发送测试确认包失败: " + e.getMessage());
         }
     }
 }

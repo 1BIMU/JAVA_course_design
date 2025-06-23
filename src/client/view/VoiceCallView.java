@@ -195,23 +195,6 @@ public class VoiceCallView extends JFrame {
             }
         });
 
-        // 创建静音按钮
-        muteButton = new JToggleButton("静音");
-        muteButton.setPreferredSize(new Dimension(100, 40));
-        muteButton.setEnabled(false);
-        muteButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                // TODO: 实现静音功能
-                boolean muted = muteButton.isSelected();
-                if (muted) {
-                    muteButton.setText("取消静音");
-                } else {
-                    muteButton.setText("静音");
-                }
-            }
-        });
-
         // 根据通话状态添加按钮
         if (voiceInfo.getStatus() == Voice_info.CallStatus.REQUESTING) {
             // 判断是否为呼叫发起方
