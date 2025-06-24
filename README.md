@@ -50,4 +50,4 @@ src/
 如有任何问题或建议，请通过[项目Issue页面]联系我们。
 
 ## 版权声明
-本项目遵循[Mit License]
+本项目遵循[MIT License](LICENSE).
